@@ -41,6 +41,7 @@ export enum DwnErrorCode {
   RecordsDeriveLeafPublicKeyUnSupportedCurve = 'RecordsDeriveLeafPublicKeyUnSupportedCurve',
   RecordsInvalidAncestorKeyDerivationSegment = 'RecordsInvalidAncestorKeyDerivationSegment',
   RecordsProtocolsDerivationSchemeMissingProtocol = 'RecordsProtocolsDerivationSchemeMissingProtocol',
+  RecordsReadRecordIdOutOfGrantScope = 'RecordsReadRecordIdOutOfGrantScope',
   RecordsSchemasDerivationSchemeMissingSchema = 'RecordsSchemasDerivationSchemeMissingSchema',
   RecordsWriteGetEntryIdUndefinedAuthor = 'RecordsWriteGetEntryIdUndefinedAuthor',
   RecordsWriteDataCidMismatch = 'RecordsWriteDataCidMismatch',

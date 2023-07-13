@@ -17,7 +17,7 @@ export class GrantAuthorization {
     incomingMessage: Message<GenericMessage>,
     author: string,
     messageStore: MessageStore,
-  ): Promise<void> {
+  ): Promise<PermissionsGrantMessage> {
     const permissionsGrantId: string = incomingMessage.authorizationPayload!.permissionsGrantId!;
 
     // Fetch grant
@@ -34,6 +34,8 @@ export class GrantAuthorization {
 
     // Check grant scope for interface and method
     await GrantAuthorization.verifyGrantScopeInterfaceAndMethod(incomingMessage.message, permissionsGrantMessage, permissionsGrantId);
+
+    return permissionsGrantMessage;
   }
 
   /**

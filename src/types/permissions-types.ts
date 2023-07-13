@@ -4,6 +4,12 @@ import type { DwnInterfaceName, DwnMethodName } from '../index.js';
 export type PermissionScope = {
   interface: DwnInterfaceName;
   method: DwnMethodName;
+} | PermissionsRecordReadScope;
+
+export type PermissionsRecordReadScope = {
+  interface: DwnInterfaceName.Records;
+  method: DwnMethodName.Read;
+  recordIds: string[];
 };
 
 export type PermissionConditions = {

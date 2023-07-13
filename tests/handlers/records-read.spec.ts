@@ -1,6 +1,8 @@
 import type { DerivedPrivateJwk } from '../../src/utils/hd-key.js';
 import type { EncryptionInput } from '../../src/interfaces/records-write.js';
+
 import type { DataStore, EventLog, MessageStore } from '../../src/index.js';
+import { DwnInterfaceName, DwnMethodName } from '../../src/index.js';
 
 import chaiAsPromised from 'chai-as-promised';
 import emailProtocolDefinition from '../vectors/protocol-definitions/email.json' assert { type: 'json' };
@@ -312,6 +314,64 @@ export function testRecordsReadHandler(): void {
           const imposterReadReply = await dwn.processMessage(alice.did, imposterRecordsRead.message);
           expect(imposterReadReply.status.code).to.equal(401);
           expect(imposterReadReply.status.detail).to.include(DwnErrorCode.ProtocolAuthorizationActionNotAllowed);
+        });
+      });
+
+      describe('Grant authorized reads', () => {
+        it('allows grants with unrestricted RecordsRead access to records within a protocol', async () => {
+          // scenario: Alice writes content to her DWN in the content-creator protocol. She gives Bob a PermissionsGrant
+          //           with scope RecordsRead. Bob invokes that grant to read records in the content-creator protocol on Alice's DWN.
+
+          const alice = await DidKeyResolver.generate();
+          const bob = await DidKeyResolver.generate();
+
+          const protocolDefinition = emailProtocolDefinition;
+
+          // Install email protocol on Alice's DWN
+          const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+            author: alice,
+            protocolDefinition
+          });
+          const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+          expect(protocolWriteReply.status.code).to.equal(202);
+
+          // Alice's writes a message to her DWN with herself as recipient
+          const encodedEmail = new TextEncoder().encode('Dear Myself, hello!');
+          const emailRecordsWrite = await TestDataGenerator.generateRecordsWrite({
+            author       : bob,
+            protocol     : protocolDefinition.protocol,
+            protocolPath : 'email', // this comes from `types` in protocol definition
+            schema       : protocolDefinition.types.email.schema,
+            dataFormat   : protocolDefinition.types.email.dataFormats[0],
+            data         : encodedEmail,
+            recipient    : alice.did
+          });
+          const imageReply = await dwn.processMessage(alice.did, emailRecordsWrite.message, emailRecordsWrite.dataStream);
+          expect(imageReply.status.code).to.equal(202);
+
+          // Alice creates a PermissionsGrant allowing bob to RecordsRead a specific record from her DWN
+          const recordId = await emailRecordsWrite.recordsWrite.getEntryId();
+          const permissionsGrant = await TestDataGenerator.generatePermissionsGrant({
+            author     : alice,
+            grantedBy  : alice.did,
+            grantedFor : alice.did,
+            grantedTo  : bob.did,
+            scope      : {
+              interface : DwnInterfaceName.Records,
+              method    : DwnMethodName.Read,
+              recordIds : [recordId]
+            }
+          });
+          const permissionsGrantReply = await dwn.processMessage(alice.did, permissionsGrant.message);
+          expect(permissionsGrantReply.status.code).to.equal(202);
+
+          // Bob invokes the grant to read
+          const recordsRead = await RecordsRead.create({
+            recordId,
+            authorizationSignatureInput: Jws.createSignatureInput(bob)
+          });
+          const readReply = await dwn.processMessage(alice.did, recordsRead.message);
+          expect(readReply.status.code).to.equal(200);
         });
       });
 
