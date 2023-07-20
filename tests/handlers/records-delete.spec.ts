@@ -4,13 +4,14 @@ import type {
   MessageStore
 } from '../../src/index.js';
 
+import { DwnErrorCode } from '../../src/index.js';
+
 import chaiAsPromised from 'chai-as-promised';
 import sinon from 'sinon';
 import chai, { expect } from 'chai';
 
 import { ArrayUtility } from '../../src/utils/array.js';
 import { DidKeyResolver } from '../../src/did/did-key-resolver.js';
-import { Message } from '../../src/core/message.js';
 import { RecordsDeleteHandler } from '../../src/handlers/records-delete.js';
 import { sleep } from '../../src/utils/time.js';
 import { stubInterface } from 'ts-sinon';
@@ -18,6 +19,7 @@ import { TestDataGenerator } from '../utils/test-data-generator.js';
 import { TestStores } from '../test-stores.js';
 import { TestStubGenerator } from '../utils/test-stub-generator.js';
 import { DataStream, DidResolver, Dwn, Encoder, Jws, RecordsDelete, RecordsRead, RecordsWrite } from '../../src/index.js';
+import { DwnInterfaceName, DwnMethodName, Message } from '../../src/core/message.js';
 
 chai.use(chaiAsPromised);
 
@@ -276,6 +278,141 @@ export function testRecordsDeleteHandler(): void {
         expect(aliceQueryWriteAfterAliceRewriteReply.status.code).to.equal(200);
         expect(aliceQueryWriteAfterAliceRewriteReply.entries?.length).to.equal(1);
         expect(aliceQueryWriteAfterAliceRewriteReply.entries![0].encodedData).to.equal(encodedData);
+      });
+
+      it('rejects authenticated non-tenant non-granted deletes with 401', async () => {
+        // Bob tries to RecordsDelete to Alice's DWN without a PermissionsGrant
+        const alice = await DidKeyResolver.generate();
+        const bob = await DidKeyResolver.generate();
+
+        const protocolsQuery = await TestDataGenerator.generateRecordsDelete({
+          author: bob,
+        });
+        const protocolsQueryReply = await dwn.processMessage(alice.did, protocolsQuery.message);
+        expect(protocolsQueryReply.status.code).to.equal(401);
+        expect(protocolsQueryReply.status.detail).to.contain('message failed authorization');
+      });
+
+      describe('grant based deletes', () => {
+        it('allows external parties to delete a record using a grant with unrestricted RecordsRead scope', async () => {
+          // scenario: Alice gives Bob a grant allowing him to read any record in her DWN.
+          //           Bob invokes that grant to read a record.
+
+          const alice = await DidKeyResolver.generate();
+          const bob = await DidKeyResolver.generate();
+
+          // Alice writes a record to her DWN
+          const { message, dataStream } = await TestDataGenerator.generateRecordsWrite({
+            author: alice,
+          });
+          const writeReply = await dwn.processMessage(alice.did, message, dataStream);
+          expect(writeReply.status.code).to.equal(202);
+
+          // Alice issues a PermissionsGrant allowing Bob to read any record in her DWN
+          const permissionsGrant = await TestDataGenerator.generatePermissionsGrant({
+            author     : alice,
+            grantedBy  : alice.did,
+            grantedTo  : bob.did,
+            grantedFor : alice.did,
+            scope      : {
+              interface : DwnInterfaceName.Records,
+              method    : DwnMethodName.Delete,
+              // No futher restrictions on grant scope
+            }
+          });
+          const grantReply = await dwn.processMessage(alice.did, permissionsGrant.message);
+          expect(grantReply.status.code).to.equal(202);
+
+          // Bob invokes that grant to delete a record from Alice's DWN
+          const recordsDelete = await TestDataGenerator.generateRecordsDelete({
+            author             : bob,
+            recordId           : message.recordId,
+            permissionsGrantId : await Message.getCid(permissionsGrant.message),
+          });
+          const deleteReply = await dwn.processMessage(alice.did, recordsDelete.message);
+          expect(deleteReply.status.code).to.equal(202);
+        });
+
+        describe('grant scope recordIds', () => {
+          it('allows access if the RecordsDelete grant scope recordIds includes the recordId', async () => {
+            // scenario: Alice gives Bob a grant allowing him to read a specified set of recordIds in her DWN.
+            //           Bob invokes that grant to read a record.
+
+            const alice = await DidKeyResolver.generate();
+            const bob = await DidKeyResolver.generate();
+
+            // Alice writes a record to her DWN
+            const { message, dataStream } = await TestDataGenerator.generateRecordsWrite({
+              author: alice,
+            });
+            const writeReply = await dwn.processMessage(alice.did, message, dataStream);
+            expect(writeReply.status.code).to.equal(202);
+
+            // Alice issues a PermissionsGrant allowing Bob to read a specific recordId
+            const permissionsGrant = await TestDataGenerator.generatePermissionsGrant({
+              author     : alice,
+              grantedBy  : alice.did,
+              grantedTo  : bob.did,
+              grantedFor : alice.did,
+              scope      : {
+                interface : DwnInterfaceName.Records,
+                method    : DwnMethodName.Delete,
+                recordIds : [message.recordId]
+              }
+            });
+            const grantReply = await dwn.processMessage(alice.did, permissionsGrant.message);
+            expect(grantReply.status.code).to.equal(202);
+
+            // Bob invokes that grant to delete a record from Alice's DWN
+            const recordsDelete = await TestDataGenerator.generateRecordsDelete({
+              author             : bob,
+              recordId           : message.recordId,
+              permissionsGrantId : await Message.getCid(permissionsGrant.message),
+            });
+            const deleteReply = await dwn.processMessage(alice.did, recordsDelete.message);
+            expect(deleteReply.status.code).to.equal(202);
+          });
+
+          it('rejects with 401 if the RecordsDelete grant scope recordIds does not include the recordId', async () => {
+            // scenario: Alice gives Bob a grant allowing him to read a specified set of recordIds in her DWN.
+            //           Bob invokes that grant to read a different record and is rejected.
+
+            const alice = await DidKeyResolver.generate();
+            const bob = await DidKeyResolver.generate();
+
+            // Alice writes a record to her DWN
+            const { message, dataStream } = await TestDataGenerator.generateRecordsWrite({
+              author: alice,
+            });
+            const writeReply = await dwn.processMessage(alice.did, message, dataStream);
+            expect(writeReply.status.code).to.equal(202);
+
+            // Alice issues a PermissionsGrant allowing Bob to read a specific recordId
+            const permissionsGrant = await TestDataGenerator.generatePermissionsGrant({
+              author     : alice,
+              grantedBy  : alice.did,
+              grantedTo  : bob.did,
+              grantedFor : alice.did,
+              scope      : {
+                interface : DwnInterfaceName.Records,
+                method    : DwnMethodName.Delete,
+                recordIds : [await TestDataGenerator.randomCborSha256Cid()] // different record than what Bob will try to read
+              }
+            });
+            const grantReply = await dwn.processMessage(alice.did, permissionsGrant.message);
+            expect(grantReply.status.code).to.equal(202);
+
+            // Bob invokes that grant to delete a record from Alice's DWN
+            const recordsDelete = await TestDataGenerator.generateRecordsDelete({
+              author             : bob,
+              recordId           : message.recordId,
+              permissionsGrantId : await Message.getCid(permissionsGrant.message),
+            });
+            const deleteReply = await dwn.processMessage(alice.did, recordsDelete.message);
+            expect(deleteReply.status.code).to.equal(401);
+            expect(deleteReply.status.detail).to.include(DwnErrorCode.RecordsGrantAuthorizationRecordIds);
+          });
+        });
       });
 
       describe('event log', () => {

@@ -1,16 +1,18 @@
+import type { MessageStore } from '../index.js';
+import type { SignatureInput } from '../types/jws-types.js';
 import type { RecordsDeleteDescriptor, RecordsDeleteMessage } from '../types/records-types.js';
 
 import { getCurrentTimeInHighPrecision } from '../utils/time.js';
 import { Message } from '../core/message.js';
-import type { SignatureInput } from '../types/jws-types.js';
-
-import { authorize, validateAuthorizationIntegrity } from '../core/auth.js';
+import { RecordsGrantAuthorization } from '../core/records-grant-authorization.js';
+import { validateAuthorizationIntegrity } from '../core/auth.js';
 import { DwnInterfaceName, DwnMethodName } from '../core/message.js';
 
 export type RecordsDeleteOptions = {
   recordId: string;
   messageTimestamp?: string;
   authorizationSignatureInput: SignatureInput;
+  permissionsGrantId?: string;
 };
 
 export class RecordsDelete extends Message<RecordsDeleteMessage> {
@@ -38,7 +40,7 @@ export class RecordsDelete extends Message<RecordsDeleteMessage> {
       messageTimestamp : options.messageTimestamp ?? currentTime
     };
 
-    const authorization = await Message.signAsAuthorization(descriptor, options.authorizationSignatureInput);
+    const authorization = await Message.signAsAuthorization(descriptor, options.authorizationSignatureInput, options.permissionsGrantId);
     const message: RecordsDeleteMessage = { descriptor, authorization };
 
     Message.validateJsonSchema(message);
@@ -46,8 +48,15 @@ export class RecordsDelete extends Message<RecordsDeleteMessage> {
     return new RecordsDelete(message);
   }
 
-  public async authorize(tenant: string): Promise<void> {
+  public async authorize(tenant: string, messageStore: MessageStore): Promise<void> {
     // TODO: #203 - implement protocol-based authorization for RecordsDelete (https://github.com/TBD54566975/dwn-sdk-js/issues/203)
-    await authorize(tenant, this);
+
+    if (tenant === this.author) {
+      // if author is the same as the target tenant, we can directly grant access
+    } else if (this.authorizationPayload?.permissionsGrantId) {
+      await RecordsGrantAuthorization.authorizeRecordsGrant(tenant, this, messageStore);
+    } else {
+      throw new Error('message failed authorization');
+    }
   }
 }

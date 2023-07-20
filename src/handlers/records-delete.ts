@@ -31,7 +31,7 @@ export class RecordsDeleteHandler implements MethodHandler {
     // authentication & authorization
     try {
       await authenticate(message.authorization, this.didResolver);
-      await recordsDelete.authorize(tenant);
+      await recordsDelete.authorize(tenant, this.messageStore);
     } catch (e) {
       return messageReplyFromError(e, 401);
     }

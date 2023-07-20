@@ -190,8 +190,8 @@ export function testProtocolsQueryHandler(): void {
         expect(reply.status.detail).to.contain('not a valid DID');
       });
 
-      it('rejects authenticated non-tenant non-granted ProtocolsConfigures with 401', async () => {
-        // Bob tries to ProtocolsConfigure to Alice's DWN without a PermissionsGrant
+      it('rejects authenticated non-tenant non-granted ProtocolsQuery with 401', async () => {
+        // Bob tries to ProtocolsQuery to Alice's DWN without a PermissionsGrant
         const alice = await DidKeyResolver.generate();
         const bob = await DidKeyResolver.generate();
 

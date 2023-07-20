@@ -163,6 +163,7 @@ export type GenerateRecordsQueryOutput = {
 export type GenerateRecordsDeleteInput = {
   author?: Persona;
   recordId?: string;
+  permissionsGrantId?: string;
 };
 
 export type GenerateRecordsDeleteOutput = {
@@ -502,7 +503,8 @@ export class TestDataGenerator {
 
     const recordsDelete = await RecordsDelete.create({
       recordId                    : input?.recordId ?? await TestDataGenerator.randomCborSha256Cid(),
-      authorizationSignatureInput : Jws.createSignatureInput(author)
+      authorizationSignatureInput : Jws.createSignatureInput(author),
+      permissionsGrantId          : input?.permissionsGrantId
     });
 
     return {
