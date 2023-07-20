@@ -116,6 +116,7 @@ export type GenerateRecordsWriteInput = {
   messageTimestamp?: string;
   datePublished?: string;
   encryptionInput?: EncryptionInput;
+  permissionsGrantId?: string;
 };
 
 export type GenerateFromRecordsWriteInput = {
@@ -125,6 +126,7 @@ export type GenerateFromRecordsWriteInput = {
   published?: boolean;
   messageTimestamp?: string;
   datePublished?: string;
+  permissionsGrantId?: string;
 };
 
 export type GenerateFromRecordsWriteOut = {
@@ -390,24 +392,25 @@ export class TestDataGenerator {
     }
 
     const options: RecordsWriteOptions = {
-      recipient        : input?.recipient,
-      protocol         : input?.protocol,
-      protocolPath     : input?.protocolPath,
-      contextId        : input?.contextId,
-      schema           : input?.schema ?? `http://${TestDataGenerator.randomString(20)}`,
-      recordId         : input?.recordId,
-      parentId         : input?.parentId,
-      published        : input?.published,
-      dataFormat       : input?.dataFormat ?? 'application/json',
-      dateCreated      : input?.dateCreated,
-      messageTimestamp : input?.messageTimestamp,
-      datePublished    : input?.datePublished,
-      data             : dataBytes,
+      recipient          : input?.recipient,
+      protocol           : input?.protocol,
+      protocolPath       : input?.protocolPath,
+      contextId          : input?.contextId,
+      schema             : input?.schema ?? `http://${TestDataGenerator.randomString(20)}`,
+      recordId           : input?.recordId,
+      parentId           : input?.parentId,
+      published          : input?.published,
+      dataFormat         : input?.dataFormat ?? 'application/json',
+      dateCreated        : input?.dateCreated,
+      messageTimestamp   : input?.messageTimestamp,
+      datePublished      : input?.datePublished,
+      data               : dataBytes,
       dataCid,
       dataSize,
       authorizationSignatureInput,
       attestationSignatureInputs,
-      encryptionInput  : input?.encryptionInput
+      encryptionInput    : input?.encryptionInput,
+      permissionsGrantId : input?.permissionsGrantId,
     };
 
     const recordsWrite = await RecordsWrite.create(options);
@@ -445,7 +448,8 @@ export class TestDataGenerator {
       published,
       datePublished,
       messageTimestamp            : input.messageTimestamp,
-      authorizationSignatureInput : Jws.createSignatureInput(input.author)
+      authorizationSignatureInput : Jws.createSignatureInput(input.author),
+      permissionsGrantId          : input.permissionsGrantId,
     };
 
     const recordsWrite = await RecordsWrite.createFrom(options);
