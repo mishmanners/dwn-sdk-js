@@ -185,30 +185,6 @@ export function testRecordsReadHandler(): void {
         expect(ArrayUtility.byteArraysEqual(dataFetched, dataBytes!)).to.be.true;
       });
 
-      it('should not allow read without `recordId` or `protocol` and `protocolPath` to be set', async () => {
-        const alice = await DidKeyResolver.generate();
-
-        // insert public data
-        const { message, dataStream } = await TestDataGenerator.generateRecordsWrite({ author: alice, published: true });
-        const writeReply = await dwn.processMessage(alice.did, message, dataStream);
-        expect(writeReply.status.code).to.equal(202);
-
-        // testing public RecordsRead
-        const bob = await DidKeyResolver.generate();
-
-        // create with recordId to avoid the failure here
-        const recordsRead = await RecordsRead.create({
-          recordId                    : 'recordId',
-          authorizationSignatureInput : Jws.createSignatureInput(bob)
-        });
-        // delete recordId to induce the failure on the handler
-        delete recordsRead.message.descriptor.recordId;
-
-        const readReply = await dwn.handleRecordsRead(alice.did, recordsRead.message);
-        expect(readReply.status.code).to.equal(400);
-        expect(readReply.status.detail).to.contain('must have required property \'recordId\'');
-      });
-
       it('should not allow read `protocol` set', async () => {
         const alice = await DidKeyResolver.generate();
 
@@ -992,6 +968,70 @@ export function testRecordsReadHandler(): void {
             expect(bazPathReply2.record!.recordId).to.equal(baz2Message.message.recordId);
             expect(bazPathReply2.record!.descriptor.parentId).to.equal(bar2Message.message.recordId);
           });
+        });
+
+        it('rejects reads without permission to protocol', async () => {
+          // scenario: Bob sends an email to Alice, then Bob reads the email.
+          //           ImposterBob tries and fails to read the email.
+          const alice = await DidKeyResolver.generate();
+          const bob = await DidKeyResolver.generate();
+          const imposterBob = await DidKeyResolver.generate();
+
+          const protocolDefinition = emailProtocolDefinition as ProtocolDefinition;
+
+          // Install email protocol on Alice's DWN
+          const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+            author: alice,
+            protocolDefinition
+          });
+          const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+          expect(protocolWriteReply.status.code).to.equal(202);
+
+          const imposterBobEmail = new TextEncoder().encode('Dear Alice, hello!');
+          const imposterRecordsWrite = await TestDataGenerator.generateRecordsWrite({
+            author       : imposterBob,
+            protocol     : protocolDefinition.protocol,
+            protocolPath : 'email', // this comes from `types` in protocol definition
+            schema       : protocolDefinition.types.email.schema,
+            dataFormat   : protocolDefinition.types.email.dataFormats![0],
+            data         : imposterBobEmail,
+            recipient    : alice.did
+          });
+          const imposterBobReply = await dwn.processMessage(alice.did, imposterRecordsWrite.message, imposterRecordsWrite.dataStream);
+          expect(imposterBobReply.status.code).to.equal(202);
+
+
+          // Alice writes an email with Bob as recipient
+          const encodedEmail = new TextEncoder().encode('Dear Alice, hello!');
+          const emailRecordsWrite = await TestDataGenerator.generateRecordsWrite({
+            author       : bob,
+            protocol     : protocolDefinition.protocol,
+            protocolPath : 'email', // this comes from `types` in protocol definition
+            schema       : protocolDefinition.types.email.schema,
+            dataFormat   : protocolDefinition.types.email.dataFormats![0],
+            data         : encodedEmail,
+            recipient    : alice.did
+          });
+          const bobReply = await dwn.processMessage(alice.did, emailRecordsWrite.message, emailRecordsWrite.dataStream);
+          expect(bobReply.status.code).to.equal(202);
+
+          // ImposterBob tries to read their own email successfully
+          const iBobRecordsRead = await RecordsRead.create({
+            recordId                    : imposterRecordsWrite.message.recordId,
+            authorizationSignatureInput : Jws.createSignatureInput(imposterBob)
+          });
+          const iBobReply = await dwn.processMessage(alice.did, iBobRecordsRead.message);
+          expect(iBobReply.status.code).to.equal(200);
+
+          // ImposterBob tries to read latest email
+          const imposterRecordsRead = await RecordsRead.create({
+            protocol                    : protocolDefinition.protocol,
+            protocolPath                : 'email', // this comes from `types` in protocol definition
+            authorizationSignatureInput : Jws.createSignatureInput(imposterBob)
+          });
+          const imposterReadReply = await dwn.processMessage(alice.did, imposterRecordsRead.message);
+          expect(imposterReadReply.status.code).to.equal(401);
+          expect(imposterReadReply.status.detail).to.include(DwnErrorCode.ProtocolAuthorizationActionNotAllowed);
         });
       });
 
