@@ -96,4 +96,5 @@ export class RecordsRead extends Message<RecordsReadMessage> {
       throw new Error('message failed authorization');
     }
   }
+
 }
