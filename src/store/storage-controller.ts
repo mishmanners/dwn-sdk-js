@@ -1,13 +1,15 @@
 import type { DataStore } from '../types/data-store.js';
 import type { EventLog } from '../types/event-log.js';
 import type { MessageStore } from '../types/message-store.js';
-import type { RecordsWriteMessage } from '../types/records-types.js';
-import type { GenericMessage, TimestampedMessage } from '../types/message-types.js';
+import type { Filter, GenericMessage, TimestampedMessage } from '../types/message-types.js';
+import type { RecordsDeleteMessage, RecordsWriteMessage } from '../types/records-types.js';
 
 import { constructRecordsWriteIndexes } from '../handlers/records-write.js';
 import { DwnConstant } from '../core/dwn-constant.js';
+import { lexicographicalCompare } from '../utils/string.js';
+import { Records } from '../index.js';
 import { RecordsWrite } from '../interfaces/records-write.js';
-import { DwnMethodName, Message } from '../core/message.js';
+import { DwnInterfaceName, DwnMethodName, Message } from '../core/message.js';
 
 /**
  * A class that provides an abstraction for the usage of MessageStore, DataStore, and EventLog.
@@ -76,6 +78,58 @@ export class StorageController {
 
       await eventLog.deleteEventsByCid(tenant, deletedMessageCids);
     }
+  }
+
+  public static async deletePathLimitMessages(
+    tenant: string,
+    pathKeepLimit: number,
+    incomingMessage: RecordsWrite,
+    pathMessages: (RecordsWriteMessage|RecordsDeleteMessage)[],
+    messageStore: MessageStore,
+    dataStore: DataStore,
+    eventLog: EventLog
+  ): Promise<void> {
+    // get records to purge, sort by most recent first, get unique record Ids.
+    const recordIdsToPurge = pathMessages.filter( message => Records.getRecordId(message) !== incomingMessage.message.recordId)
+      .sort((a, b) => lexicographicalCompare(b.descriptor.messageTimestamp, a.descriptor.messageTimestamp))
+      .reduce((acc: string[], current: TimestampedMessage): string[] => {
+        const recordId = Records.getRecordId(current as (RecordsWriteMessage | RecordsDeleteMessage));
+        if (acc.includes(recordId)) {
+          return acc;
+        }
+        return [ ...acc, recordId ];
+      }, []).filter((_,i) => i >= (pathKeepLimit - 1));
+
+    for (const recordId of recordIdsToPurge) {
+      // get records that could break without the parent.
+      const parentQuery: Filter = {
+        interface : DwnInterfaceName.Records,
+        parentId  : recordId,
+      };
+      const purgeParents = await messageStore.query(tenant, parentQuery) as (RecordsWriteMessage | RecordsDeleteMessage)[];
+      // get records that could break without the context.
+      const contextQuery: Filter = {
+        interface : DwnInterfaceName.Records,
+        contextId : recordId,
+      };
+      const purgeContext = await messageStore.query(tenant, contextQuery) as (RecordsWriteMessage | RecordsDeleteMessage)[];
+      const combinedRecords = [...purgeParents, ...purgeContext];
+      combinedRecords.forEach(r => {
+        const recordId = Records.getRecordId(r);
+        if (!recordIdsToPurge.includes(recordId)) {
+          recordIdsToPurge.push(recordId);
+        }
+      });
+      pathMessages.push(...combinedRecords);
+    }
+
+    const deletedMessageCids: string[] = [];
+    for (const message of pathMessages.filter(m => recordIdsToPurge.includes(Records.getRecordId(m)))) {
+      const messageCid = await Message.getCid(message);
+      await StorageController.delete(messageStore, dataStore, tenant, message);
+      deletedMessageCids.push(messageCid);
+    }
+    await eventLog.deleteEventsByCid(tenant, deletedMessageCids);
   }
 }
 

@@ -13,7 +13,6 @@ import { StorageController } from '../store/storage-controller.js';
 import { DwnInterfaceName, DwnMethodName, Message } from '../core/message.js';
 
 import { removeUndefinedProperties } from '../utils/object.js';
-
 export class RecordsDeleteHandler implements MethodHandler {
 
   constructor(private didResolver: DidResolver, private messageStore: MessageStore, private dataStore: DataStore, private eventLog: EventLog) { }

@@ -2,9 +2,8 @@ import type { EncryptionInput } from '../../src/interfaces/records-write.js';
 import type { GenerateFromRecordsWriteOut } from '../utils/test-data-generator.js';
 import type { ProtocolDefinition } from '../../src/types/protocols-types.js';
 import type { QueryResultEntry } from '../../src/types/message-types.js';
-import type { RecordsWriteMessage } from '../../src/types/records-types.js';
 import type { RecordsWriteMessageWithOptionalEncodedData } from '../../src/store/storage-controller.js';
-import type { DataStore, EventLog, MessageStore } from '../../src/index.js';
+import type { DataStore, EventLog, MessageStore, RecordsReadReply, RecordsWriteMessage } from '../../src/index.js';
 
 import chaiAsPromised from 'chai-as-promised';
 import credentialIssuanceProtocolDefinition from '../vectors/protocol-definitions/credential-issuance.json' assert { type: 'json' };
@@ -2102,47 +2101,197 @@ export function testRecordsWriteHandler(): void {
           expect(bobRecordsReadReply.status.code).to.equal(404);
         });
 
-        it('should get appropriate path keep limit from definition', async () => {
-          const alice = await DidKeyResolver.generate();
+        describe('records writes with the $keep limit', () => {
+          it('should get appropriate path $keep limit from definition', async () => {
+            const alice = await DidKeyResolver.generate();
 
-          const protocolDefinition = { ...socialMediaProtocolDefinition };
-          const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
-            author: alice,
-            protocolDefinition
-          });
-          const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
-          expect(protocolWriteReply.status.code).to.equal(202);
+            const protocolDefinition = { ...socialMediaProtocolDefinition };
+            const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+              author: alice,
+              protocolDefinition
+            });
+            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+            expect(protocolWriteReply.status.code).to.equal(202);
 
-          const profileWrite = await TestDataGenerator.generateRecordsWrite({
-            author       : alice,
-            protocol     : protocolDefinition.protocol,
-            protocolPath : 'profile',
-          });
+            const profileWrite = await TestDataGenerator.generateRecordsWrite({
+              author       : alice,
+              protocol     : protocolDefinition.protocol,
+              protocolPath : 'profile',
+            });
 
-          const keepLimit = await profileWrite.recordsWrite.getProtocolPathKeep(alice.did, messageStore);
-          expect(keepLimit).to.not.be.undefined;
-          expect(keepLimit).to.equal(1);
-        });
-
-        it('should returned undefined if no keep limit exists', async () => {
-          const alice = await DidKeyResolver.generate();
-
-          const protocolDefinition = { ...socialMediaProtocolDefinition };
-          const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
-            author: alice,
-            protocolDefinition
-          });
-          const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
-          expect(protocolWriteReply.status.code).to.equal(202);
-
-          const messageWrite = await TestDataGenerator.generateRecordsWrite({
-            author       : alice,
-            protocol     : protocolDefinition.protocol,
-            protocolPath : 'message',
+            const keepLimit = await profileWrite.recordsWrite.getProtocolPathKeep(alice.did, messageStore);
+            expect(keepLimit).to.not.be.undefined;
+            expect(keepLimit).to.equal(1);
           });
 
-          const keepLimit = await messageWrite.recordsWrite.getProtocolPathKeep(alice.did, messageStore);
-          expect(keepLimit).to.be.undefined;
+          it('should returned undefined if no $keep limit exists', async () => {
+            const alice = await DidKeyResolver.generate();
+
+            const protocolDefinition = { ...socialMediaProtocolDefinition };
+            const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+              author: alice,
+              protocolDefinition
+            });
+            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+            expect(protocolWriteReply.status.code).to.equal(202);
+
+            const messageWrite = await TestDataGenerator.generateRecordsWrite({
+              author       : alice,
+              protocol     : protocolDefinition.protocol,
+              protocolPath : 'message',
+            });
+
+            const keepLimit = await messageWrite.recordsWrite.getProtocolPathKeep(alice.did, messageStore);
+            expect(keepLimit).to.be.undefined;
+          });
+
+          it('should only return the number of records as defined in the $keep limit', async () => {
+            const alice = await DidKeyResolver.generate();
+
+            const protocolDefinition = { ...socialMediaProtocolDefinition };
+            const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+              author: alice,
+              protocolDefinition
+            });
+            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+            expect(protocolWriteReply.status.code).to.equal(202);
+
+            for ( const profile of Array(10).fill({}).map((_,i) => new TextEncoder().encode(`profile-${i + 1}`))) {
+              const profileMessage = await TestDataGenerator.generateRecordsWrite({
+                data         : profile,
+                author       : alice,
+                protocol     : protocolDefinition.protocol,
+                schema       : protocolDefinition.types.profile.schema,
+                dataFormat   : protocolDefinition.types.profile.dataFormats[0],
+                protocolPath : 'profile'
+              });
+              const profileWriteReply = await dwn.processMessage(alice.did, profileMessage.message, profileMessage.dataStream);
+              expect(profileWriteReply.status.code).to.equal(202);
+            };
+
+            const profileQueryMesage = await TestDataGenerator.generateRecordsQuery({
+              filter: {
+                protocol     : protocolDefinition.protocol,
+                protocolPath : 'profile'
+              },
+              author: alice,
+            });
+            const profileQueryResponse = await dwn.processMessage(alice.did, profileQueryMesage.message);
+            expect(profileQueryResponse.status.code).to.equal(200);
+            expect(profileQueryResponse.entries!.length).to.equal(protocolDefinition.structure.profile.$keep);
+          });
+
+          it('should remove RecordsDelete when purging records that exceed the $keep limit', async () => {
+            const alice = await DidKeyResolver.generate();
+
+            const protocolDefinition = { ...socialMediaProtocolDefinition };
+            const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+              author: alice,
+              protocolDefinition
+            });
+            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+            expect(protocolWriteReply.status.code).to.equal(202);
+
+            const profileWrite1 = await TestDataGenerator.generateRecordsWrite({
+              data         : new TextEncoder().encode('profile-1'),
+              author       : alice,
+              protocol     : protocolDefinition.protocol,
+              schema       : protocolDefinition.types.profile.schema,
+              dataFormat   : protocolDefinition.types.profile.dataFormats[0],
+              protocolPath : 'profile',
+            });
+            const profileWriteResponse1 = await dwn.processMessage(alice.did, profileWrite1.message, profileWrite1.dataStream);
+            expect(profileWriteResponse1.status.code).to.equal(202);
+
+            const profile1Delete = await TestDataGenerator.generateRecordsDelete({
+              author   : alice,
+              recordId : profileWrite1.message.recordId,
+            });
+            const profileDeleteResposne = await dwn.processMessage(alice.did, profile1Delete.message);
+            expect(profileDeleteResposne.status.code).to.equal(202);
+
+            // look for Delete message
+            const deleteFilter = {
+              method    : DwnMethodName.Delete,
+              interface : DwnInterfaceName.Records,
+            };
+            const deleteMessages = await messageStore.query(alice.did, deleteFilter);
+            expect(deleteMessages.length).to.equal(1);
+
+            const profileWrite2 = await TestDataGenerator.generateRecordsWrite({
+              data         : new TextEncoder().encode('profile-2'),
+              author       : alice,
+              protocol     : protocolDefinition.protocol,
+              schema       : protocolDefinition.types.profile.schema,
+              dataFormat   : protocolDefinition.types.profile.dataFormats[0],
+              protocolPath : 'profile',
+            });
+            const profileWriteResponse2 = await dwn.processMessage(alice.did, profileWrite2.message, profileWrite2.dataStream);
+            expect(profileWriteResponse2.status.code).to.equal(202);
+
+            // look for Delete message after 2nd Write
+            const deleteMessages2 = await messageStore.query(alice.did, deleteFilter);
+            expect(deleteMessages2.length).to.equal(0);
+          });
+
+          it('should remove any records dependant on the purged records', async () => {
+            const alice = await DidKeyResolver.generate();
+
+            const protocolDefinition = { ...socialMediaProtocolDefinition };
+            const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+              author: alice,
+              protocolDefinition
+            });
+            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+            expect(protocolWriteReply.status.code).to.equal(202);
+
+            const profileMessage = await TestDataGenerator.generateRecordsWrite({
+              data         : new TextEncoder().encode('profile-1'),
+              author       : alice,
+              protocol     : protocolDefinition.protocol,
+              schema       : protocolDefinition.types.profile.schema,
+              dataFormat   : protocolDefinition.types.profile.dataFormats[0],
+              protocolPath : 'profile'
+            });
+            const profileWriteReply = await dwn.processMessage(alice.did, profileMessage.message, profileMessage.dataStream);
+            expect(profileWriteReply.status.code).to.equal(202);
+
+            const profileAvatar = await TestDataGenerator.generateRecordsWrite({
+              data         : new TextEncoder().encode('image1.jpeg'),
+              contextId    : profileMessage.message.recordId,
+              parentId     : profileMessage.message.recordId,
+              author       : alice,
+              protocol     : protocolDefinition.protocol,
+              schema       : protocolDefinition.types.avatar.schema,
+              dataFormat   : protocolDefinition.types.avatar.dataFormats[0],
+              protocolPath : 'profile/avatar'
+            });
+            const avatarWriteReply = await dwn.processMessage(alice.did, profileAvatar.message, profileAvatar.dataStream);
+            expect(avatarWriteReply.status.code).to.equal(202);
+
+            const avatarRead = await RecordsRead.create({
+              protocol                    : protocolDefinition.protocol,
+              protocolPath                : 'profile/avatar',
+              authorizationSignatureInput : Jws.createSignatureInput(alice),
+            });
+            const avatarReadReply1 = await dwn.processMessage(alice.did, avatarRead.message) as RecordsReadReply;
+            expect(avatarReadReply1.status.code).to.equal(200);
+            expect(avatarReadReply1.record!.recordId).to.equal(profileAvatar.message.recordId);
+
+            const profileMessage2 = await TestDataGenerator.generateRecordsWrite({
+              data         : new TextEncoder().encode('profile-2'),
+              author       : alice,
+              protocol     : protocolDefinition.protocol,
+              schema       : protocolDefinition.types.profile.schema,
+              dataFormat   : protocolDefinition.types.profile.dataFormats[0],
+              protocolPath : 'profile'
+            });
+            const profileWriteReply2 = await dwn.processMessage(alice.did, profileMessage2.message, profileMessage2.dataStream);
+            expect(profileWriteReply2.status.code).to.equal(202);
+
+            const avatarReadReply2 = await dwn.processMessage(alice.did, avatarRead.message) as RecordsReadReply;
+            expect(avatarReadReply2.status.code).to.equal(404);
+          });
         });
       });
 

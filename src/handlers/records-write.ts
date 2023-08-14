@@ -7,6 +7,7 @@ import type { RecordsDeleteMessage, RecordsWriteMessage } from '../types/records
 
 import { authenticate } from '../core/auth.js';
 import { messageReplyFromError } from '../core/message-reply.js';
+import { Records } from '../index.js';
 import { RecordsWrite } from '../interfaces/records-write.js';
 import { StorageController } from '../store/storage-controller.js';
 import { Cid, DataStream, DwnConstant, Encoder } from '../index.js';
@@ -44,12 +45,28 @@ export class RecordsWriteHandler implements MethodHandler {
       return messageReplyFromError(e, 401);
     }
 
-    // get existing messages matching the `recordId`
-    const query = {
-      interface : DwnInterfaceName.Records,
-      recordId  : message.recordId
-    };
-    const existingMessages = await this.messageStore.query(tenant, query) as (RecordsWriteMessage|RecordsDeleteMessage)[];
+    // get protocol path keep limit for this message's protocolPath if defined
+    const pathKeep = await recordsWrite.getProtocolPathKeep(tenant, this.messageStore);
+    let existingMessages: (RecordsWriteMessage | RecordsDeleteMessage)[] = [];
+    let protocolPathMessages: (RecordsWriteMessage | RecordsDeleteMessage)[] = [];
+    if (pathKeep === undefined) {
+      // get existing messages matching the `recordId`
+      const query = {
+        interface : DwnInterfaceName.Records,
+        recordId  : message.recordId
+      };
+      existingMessages = await this.messageStore.query(tenant, query) as (RecordsWriteMessage|RecordsDeleteMessage)[];
+    } else {
+      // get existing messages for path
+      // only write messages are tagged for protocols.
+      const query = {
+        interface    : DwnInterfaceName.Records,
+        protocol     : message.descriptor.protocol!,
+        protocolPath : message.descriptor.protocolPath!,
+      };
+      protocolPathMessages = await this.messageStore.query(tenant, query) as (RecordsWriteMessage|RecordsDeleteMessage)[];
+      existingMessages = protocolPathMessages.filter( message => Records.getRecordId(message) === recordsWrite.message.recordId);
+    }
 
     // if the incoming write is not the initial write, then it must not modify any immutable properties defined by the initial write
     const newMessageIsInitialWrite = await recordsWrite.isInitialWrite();
@@ -124,10 +141,16 @@ export class RecordsWriteHandler implements MethodHandler {
       status: { code: 202, detail: 'Accepted' }
     };
 
-    // delete all existing messages that are not newest, except for the initial write
-    await StorageController.deleteAllOlderMessagesButKeepInitialWrite(
-      tenant, existingMessages, newestMessage, this.messageStore, this.dataStore, this.eventLog
-    );
+    if (pathKeep === undefined || pathKeep < 1) {
+      // delete all existing messages that are not newest, except for the initial write
+      await StorageController.deleteAllOlderMessagesButKeepInitialWrite(
+        tenant, existingMessages, newestMessage, this.messageStore, this.dataStore, this.eventLog
+      );
+    } else {
+      await StorageController.deletePathLimitMessages(
+        tenant, pathKeep, recordsWrite, protocolPathMessages, this.messageStore, this.dataStore, this.eventLog
+      );
+    }
 
     return messageReply;
   };
