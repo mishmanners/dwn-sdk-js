@@ -4,6 +4,8 @@ import chai, { expect } from 'chai';
 import type { ProtocolsConfigureMessage } from '../../src/index.js';
 
 import dexProtocolDefinition from '../vectors/protocol-definitions/dex.json' assert { type: 'json' };
+import socialProtocolDefinition from '../vectors/protocol-definitions/social-media.json' assert { type: 'json' };
+
 import { getCurrentTimeInHighPrecision } from '../../src/utils/time.js';
 import { Jws } from '../../src/utils/jws.js';
 import { ProtocolsConfigure } from '../../src/interfaces/protocols-configure.js';
@@ -63,6 +65,24 @@ describe('ProtocolsConfigure', () => {
 
       const message = protocolsConfig.message as ProtocolsConfigureMessage;
       expect(message.descriptor.definition.types.ask.schema).to.eq('http://ask');
+    });
+
+    it('should fail with a $keep configuration of less than 1', async () => {
+      const alice = await TestDataGenerator.generatePersona();
+
+      const protocolDefinition = JSON.parse(JSON.stringify({ ...socialProtocolDefinition }));
+      protocolDefinition.structure.profile.$keep = 0;
+
+      const options = {
+        recipient                   : alice.did,
+        data                        : TestDataGenerator.randomBytes(10),
+        dataFormat                  : 'application/json',
+        authorizationSignatureInput : Jws.createSignatureInput(alice),
+        protocol                    : protocolDefinition.protocol,
+        definition                  : protocolDefinition
+      };
+      const protocolsConfigPromise = ProtocolsConfigure.create(options);
+      await expect(protocolsConfigPromise).to.be.rejectedWith('$keep: must be >= 1');
     });
   });
 });

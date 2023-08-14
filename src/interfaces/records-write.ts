@@ -670,6 +670,14 @@ export class RecordsWrite {
     return signer.getJws();
   }
 
+  // Gets the $keep limit for the message's protocolPath
+  // todo: does this live here? better place?
+  public async getProtocolPathKeep(tenant: string, messageStore: MessageStore): Promise<number | undefined> {
+    if (this.message.descriptor.protocol !== undefined && this.message.descriptor.protocolPath !== undefined) {
+      return await ProtocolAuthorization.keepLimit(tenant, this, messageStore);
+    }
+  }
+
   /**
    * Gets the initial write from the given list or record write.
    */

@@ -2101,6 +2101,49 @@ export function testRecordsWriteHandler(): void {
           const bobRecordsReadReply = await dwn.handleRecordsRead(alice.did, bobRecordsReadData.message);
           expect(bobRecordsReadReply.status.code).to.equal(404);
         });
+
+        it('should get appropriate path keep limit from definition', async () => {
+          const alice = await DidKeyResolver.generate();
+
+          const protocolDefinition = { ...socialMediaProtocolDefinition };
+          const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+            author: alice,
+            protocolDefinition
+          });
+          const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+          expect(protocolWriteReply.status.code).to.equal(202);
+
+          const profileWrite = await TestDataGenerator.generateRecordsWrite({
+            author       : alice,
+            protocol     : protocolDefinition.protocol,
+            protocolPath : 'profile',
+          });
+
+          const keepLimit = await profileWrite.recordsWrite.getProtocolPathKeep(alice.did, messageStore);
+          expect(keepLimit).to.not.be.undefined;
+          expect(keepLimit).to.equal(1);
+        });
+
+        it('should returned undefined if no keep limit exists', async () => {
+          const alice = await DidKeyResolver.generate();
+
+          const protocolDefinition = { ...socialMediaProtocolDefinition };
+          const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+            author: alice,
+            protocolDefinition
+          });
+          const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+          expect(protocolWriteReply.status.code).to.equal(202);
+
+          const messageWrite = await TestDataGenerator.generateRecordsWrite({
+            author       : alice,
+            protocol     : protocolDefinition.protocol,
+            protocolPath : 'message',
+          });
+
+          const keepLimit = await messageWrite.recordsWrite.getProtocolPathKeep(alice.did, messageStore);
+          expect(keepLimit).to.be.undefined;
+        });
       });
 
       describe('grant based writes', () => {

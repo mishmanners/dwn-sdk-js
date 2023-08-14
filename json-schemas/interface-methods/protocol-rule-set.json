@@ -4,6 +4,10 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "$keep": {
+      "type": "integer",
+      "minimum": 1 
+    },
     "$encryption": {
       "type": "object",
       "additionalProperties": false,
