@@ -8,6 +8,12 @@
         "application/json"
       ]
     },
+    "avatar" : {
+      "schema": "userAvatar",
+      "dataFormats": [
+        "image/jpeg"
+      ]
+    },
     "message": {
       "schema": "messageSchema",
       "dataFormats": [
@@ -41,7 +47,16 @@
           "who": "anyone",
           "can": "read"
         }
-      ]
+      ],
+      "avatar": {
+        "$keep": 1,
+        "$actions": [
+          {
+            "who": "anyone",
+            "can": "read"
+          }
+        ]
+      }
     },
     "message": {
       "$actions": [

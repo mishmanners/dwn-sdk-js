@@ -81,14 +81,8 @@ export class ProtocolAuthorization {
     record: RecordsWrite,
     messageStore: MessageStore,
   ): Promise<number | undefined> {
-
-    // todo: this is being called twice in order to get the definition.
-    // there is another existing branch that removes the need for this. will rebase.
-    const ancestorMessageChain: RecordsWriteMessage[] =
-    await ProtocolAuthorization.constructAncestorMessageChain(tenant, record, messageStore);
-    const definition = await this.fetchProtocolDefinition(tenant, record, ancestorMessageChain, messageStore);
-
-    return ProtocolAuthorization.getRuleSet(record.message, definition, ancestorMessageChain).$keep;
+    const definition = await this.fetchProtocolDefinition(tenant, record, messageStore);
+    return ProtocolAuthorization.getRuleSet(record, definition).$keep;
   }
 
   /**

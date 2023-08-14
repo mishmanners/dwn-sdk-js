@@ -1,7 +1,8 @@
 import type { DerivedPrivateJwk } from './hd-key.js';
 import type { Readable } from 'readable-stream';
-import type { RecordsWriteDescriptor, UnsignedRecordsWriteMessage } from '../types/records-types.js';
+import type { RecordsDeleteMessage, RecordsWriteDescriptor, RecordsWriteMessage, UnsignedRecordsWriteMessage } from '../types/records-types.js';
 
+import { DwnMethodName } from '../index.js';
 import { Encoder } from './encoder.js';
 import { Encryption } from './encryption.js';
 import { KeyDerivationScheme } from './hd-key.js';
@@ -208,5 +209,12 @@ export class Records {
           `Ancestor key derivation segment '${ancestorSegment}' mismatches against the descendant key derivation segment '${descendantSegment}'.`);
       }
     }
+  }
+
+  public static getRecordId(record: RecordsWriteMessage | RecordsDeleteMessage): string {
+    if (record.descriptor.method === DwnMethodName.Delete) {
+      return (record as RecordsDeleteMessage).descriptor.recordId;
+    }
+    return (record as RecordsWriteMessage).recordId;
   }
 }

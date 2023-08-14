@@ -3,6 +3,7 @@ import type { DerivedPrivateJwk, RecordsWriteDescriptor } from '../../src/index.
 import { DwnErrorCode } from '../../src/core/dwn-error.js';
 import { ed25519 } from '../../src/jose/algorithms/signing/ed25519.js';
 import { expect } from 'chai';
+import { TestDataGenerator } from './test-data-generator.js';
 import { DwnInterfaceName, DwnMethodName, KeyDerivationScheme, Records } from '../../src/index.js';
 
 describe('Records', () => {
@@ -45,6 +46,20 @@ describe('Records', () => {
     it('should throw if not given schema', async () => {
       expect(() => Records.constructKeyDerivationPathUsingSchemasScheme(undefined))
         .to.throw(DwnErrorCode.RecordsSchemasDerivationSchemeMissingSchema);
+    });
+  });
+
+  describe('getRecordId()', () => {
+    it('should return recordId of RecordsWrite message', async () => {
+      const recordId = await TestDataGenerator.randomCborSha256Cid();
+      const recordsWrite = await TestDataGenerator.generateRecordsWrite({ recordId });
+      expect(Records.getRecordId(recordsWrite.message)).to.equal(recordId);
+    });
+
+    it('should return recordId of RecordsDelete message', async () => {
+      const recordId = await TestDataGenerator.randomCborSha256Cid();
+      const recordsWrite = await TestDataGenerator.generateRecordsDelete({ recordId });
+      expect(Records.getRecordId(recordsWrite.message)).to.equal(recordId);
     });
   });
 });
