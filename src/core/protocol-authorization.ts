@@ -74,6 +74,24 @@ export class ProtocolAuthorization {
   }
 
   /**
+   * Fetches the number of records to keep for a specified protocolPath, if defined.
+   */
+  public static async keepLimit(
+    tenant: string,
+    record: RecordsWrite,
+    messageStore: MessageStore,
+  ): Promise<number | undefined> {
+
+    // todo: this is being called twice in order to get the definition.
+    // there is another existing branch that removes the need for this. will rebase.
+    const ancestorMessageChain: RecordsWriteMessage[] =
+    await ProtocolAuthorization.constructAncestorMessageChain(tenant, record, messageStore);
+    const definition = await this.fetchProtocolDefinition(tenant, record, ancestorMessageChain, messageStore);
+
+    return ProtocolAuthorization.getRuleSet(record.message, definition, ancestorMessageChain).$keep;
+  }
+
+  /**
    * Fetches the protocol definition based on the protocol specified in the given message.
    */
   private static async fetchProtocolDefinition(

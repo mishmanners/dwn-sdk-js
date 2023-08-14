@@ -72,6 +72,7 @@ export type ProtocolRuleSet = {
    */
   $encryption?: ProtocolPathEncryption;
   $actions?: ProtocolActionRule[];
+  $keep?: number;
   // JSON Schema verifies that properties other than `$actions` will actually have type ProtocolRuleSet
   [key: string]: any;
 };

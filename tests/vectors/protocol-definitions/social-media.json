@@ -2,6 +2,12 @@
   "protocol": "http://social-media.xyz",
   "published": true,
   "types": {
+    "profile": {
+      "schema": "userProfile",
+      "dataFormats": [
+        "application/json"
+      ]
+    },
     "message": {
       "schema": "messageSchema",
       "dataFormats": [
@@ -28,6 +34,15 @@
     }
   },
   "structure": {
+    "profile": {
+      "$keep": 1,
+      "$actions": [
+        {
+          "who": "anyone",
+          "can": "read"
+        }
+      ]
+    },
     "message": {
       "$actions": [
         {
