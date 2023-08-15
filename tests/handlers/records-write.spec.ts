@@ -2235,7 +2235,7 @@ export function testRecordsWriteHandler(): void {
             expect(deleteMessages2.length).to.equal(0);
           });
 
-          it('should remove any records dependant on the purged records', async () => {
+          it('should purge any child records dependant on the purged records as parents', async () => {
             const alice = await DidKeyResolver.generate();
 
             const protocolDefinition = { ...socialMediaProtocolDefinition };
@@ -2294,7 +2294,7 @@ export function testRecordsWriteHandler(): void {
             expect(avatarReadReply2.status.code).to.equal(404);
           });
 
-          it('should follow the $keep rules of the game', async () => {
+          it('should return the number of $keep records dependent on the context provided', async () => {
             const gameMaster = await DidKeyResolver.generate();
 
             const protocolDefinition = { ...gameProtocol };
@@ -2390,7 +2390,21 @@ export function testRecordsWriteHandler(): void {
               }
             }
 
+            // should return all hands, 5 players x 1 hand per player
+            const handsQuery = await TestDataGenerator.generateRecordsQuery({
+              author : gameMaster,
+              filter : {
+                protocol     : protocolDefinition.protocol,
+                protocolPath : 'game/round/player/hand'
+              }
+            });
+            const handsCount = protocolDefinition.structure.game.round.player.hand.$keep * protocolDefinition.structure.game.round.player.$keep;
+            const handsQueryReply = await dwn.processMessage(gameMaster.did, handsQuery.message) as RecordsQueryReply;
+            expect(handsQueryReply.status.code).to.equal(200);
+            expect(handsQueryReply.entries!.length).to.equal(handsCount);
+
             // query all player cards
+            // should return all cards, 5 players x 1 hand per player * 5 cards per hand.
             const allCardQuery = await TestDataGenerator.generateRecordsQuery({
               author : gameMaster,
               filter : {
@@ -2398,9 +2412,24 @@ export function testRecordsWriteHandler(): void {
                 protocolPath : 'game/round/player/hand/card'
               }
             });
+            const totalCards =
+              protocolDefinition.structure.game.round.player.$keep * protocolDefinition.structure.game.round.player.hand.card.$keep;
             const allCardsReply = await dwn.processMessage(gameMaster.did, allCardQuery.message);
             expect(allCardsReply.status.code).to.equal(200);
-            expect(allCardsReply.entries!.length).to.equal(25);
+            expect(allCardsReply.entries!.length).to.equal(totalCards);
+
+            // should only return a single hand with 5 cards.
+            const contextCardsQuery = await TestDataGenerator.generateRecordsQuery({
+              author : gameMaster,
+              filter : {
+                parentId     : handsQueryReply.entries![0].recordId,
+                protocol     : protocolDefinition.protocol,
+                protocolPath : 'game/round/player/hand/card'
+              }
+            });
+            const contextCardsReply = await dwn.processMessage(gameMaster.did, contextCardsQuery.message);
+            expect(contextCardsReply.status.code).to.equal(200);
+            expect(contextCardsReply.entries!.length).to.equal(protocolDefinition.structure.game.round.player.hand.card.$keep);
           });
         });
       });
