@@ -7,6 +7,7 @@ import type { DataStore, EventLog, MessageStore, RecordsQueryReply, RecordsReadR
 
 import chaiAsPromised from 'chai-as-promised';
 import credentialIssuanceProtocolDefinition from '../vectors/protocol-definitions/credential-issuance.json' assert { type: 'json' };
+import deepContext from '../vectors/protocol-definitions/deep-context.json' assert { type: 'json' };
 import dexProtocolDefinition from '../vectors/protocol-definitions/dex.json' assert { type: 'json' };
 import emailProtocolDefinition from '../vectors/protocol-definitions/email.json' assert { type: 'json' };
 import friendChatProtocol from '../vectors/protocol-definitions/friend-chat.json' assert { type: 'json' };
@@ -2247,8 +2248,8 @@ export function testRecordsWriteHandler(): void {
             expect(protocolWriteReply.status.code).to.equal(202);
 
             const profileMessage = await TestDataGenerator.generateRecordsWrite({
-              data         : new TextEncoder().encode('profile-1'),
               author       : alice,
+              data         : new TextEncoder().encode('profile-1'),
               protocol     : protocolDefinition.protocol,
               schema       : protocolDefinition.types.profile.schema,
               dataFormat   : protocolDefinition.types.profile.dataFormats[0],
@@ -2258,10 +2259,10 @@ export function testRecordsWriteHandler(): void {
             expect(profileWriteReply.status.code).to.equal(202);
 
             const profileAvatar = await TestDataGenerator.generateRecordsWrite({
+              author       : alice,
               data         : new TextEncoder().encode('image1.jpeg'),
               contextId    : profileMessage.message.recordId,
               parentId     : profileMessage.message.recordId,
-              author       : alice,
               protocol     : protocolDefinition.protocol,
               schema       : protocolDefinition.types.avatar.schema,
               dataFormat   : protocolDefinition.types.avatar.dataFormats[0],
@@ -2278,6 +2279,7 @@ export function testRecordsWriteHandler(): void {
             expect(avatarReadReply1.status.code).to.equal(200);
             expect(avatarReadReply1.record!.recordId).to.equal(profileAvatar.message.recordId);
 
+
             const profileMessage2 = await TestDataGenerator.generateRecordsWrite({
               data         : new TextEncoder().encode('profile-2'),
               author       : alice,
@@ -2291,6 +2293,91 @@ export function testRecordsWriteHandler(): void {
 
             const avatarReadReply2 = await dwn.processMessage(alice.did, avatarRead.message) as RecordsReadReply;
             expect(avatarReadReply2.status.code).to.equal(404);
+          });
+
+          it('should purge any descendent records when purging deep context', async () => {
+            const alice = await DidKeyResolver.generate();
+
+            const protocolDefinition = { ...deepContext };
+            const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+              author: alice,
+              protocolDefinition
+            });
+            const configure = await dwn.processMessage(alice.did, protocolsConfig.message);
+            expect(configure.status.code).to.equal(202);
+
+            const createFoo = await TestDataGenerator.generateRecordsWrite({
+              author       : alice,
+              schema       : protocolDefinition.types.foo.schema,
+              dataFormat   : protocolDefinition.types.foo.dataFormats[0],
+              protocol     : protocolDefinition.protocol,
+              protocolPath : 'foo'
+            });
+            const fooResponse = await dwn.processMessage(alice.did, createFoo.message, createFoo.dataStream);
+            expect(fooResponse.status.code).to.equal(202);
+
+            const createBar = await TestDataGenerator.generateRecordsWrite({
+              author       : alice,
+              schema       : protocolDefinition.types.bar.schema,
+              dataFormat   : protocolDefinition.types.bar.dataFormats[0],
+              parentId     : createFoo.message.recordId,
+              contextId    : createFoo.message.recordId,
+              protocol     : protocolDefinition.protocol,
+              protocolPath : 'foo/bar'
+            });
+            const barResponse = await dwn.processMessage(alice.did, createBar.message, createBar.dataStream);
+            expect(barResponse.status.code).to.equal(202);
+
+            const createBaz = await TestDataGenerator.generateRecordsWrite({
+              author       : alice,
+              schema       : protocolDefinition.types.baz.schema,
+              dataFormat   : protocolDefinition.types.baz.dataFormats[0],
+              parentId     : createBar.message.recordId,
+              contextId    : createFoo.message.recordId,
+              protocol     : protocolDefinition.protocol,
+              protocolPath : 'foo/bar/baz'
+            });
+            const bazResponse = await dwn.processMessage(alice.did, createBaz.message, createBaz.dataStream);
+            expect(bazResponse.status.code).to.equal(202);
+
+            const createBarDeep = await TestDataGenerator.generateRecordsWrite({
+              author       : alice,
+              schema       : protocolDefinition.types.bar.schema,
+              dataFormat   : protocolDefinition.types.bar.dataFormats[0],
+              parentId     : createBaz.message.recordId,
+              contextId    : createFoo.message.recordId,
+              protocol     : protocolDefinition.protocol,
+              protocolPath : 'foo/bar/baz/bar'
+            });
+            const barDeepResponse = await dwn.processMessage(alice.did, createBarDeep.message, createBarDeep.dataStream);
+            expect(barDeepResponse.status.code).to.equal(202);
+
+            const createFooDeep = await TestDataGenerator.generateRecordsWrite({
+              author       : alice,
+              schema       : protocolDefinition.types.foo.schema,
+              dataFormat   : protocolDefinition.types.foo.dataFormats[0],
+              parentId     : createBarDeep.message.recordId,
+              contextId    : createFoo.message.recordId,
+              protocol     : protocolDefinition.protocol,
+              protocolPath : 'foo/bar/baz/bar/foo'
+            });
+            const fooDeepResponse = await dwn.processMessage(alice.did, createFooDeep.message, createFooDeep.dataStream);
+            expect(fooDeepResponse.status.code).to.equal(202);
+
+            const deepFooCID = await Message.getCid(createFooDeep.message);
+            const deepFooMessage = await messageStore.get(alice.did, deepFooCID);
+            expect(deepFooMessage).to.not.be.undefined;
+
+            const deleteRoot = await RecordsDelete.create({
+              recordId                    : createFoo.message.recordId,
+              authorizationSignatureInput : Jws.createSignatureInput(alice),
+            });
+            const deleteRootReply = await dwn.processMessage(alice.did, deleteRoot.message);
+            console.log('delete', deleteRootReply);
+            expect(deleteRootReply.status.code).to.equal(202);
+
+            const deepFooMessageAfter = await messageStore.get(alice.did, deepFooCID);
+            expect(deepFooMessageAfter).to.be.undefined;
           });
 
           it('should return the number of $keep records dependent on the context provided', async () => {

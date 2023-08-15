@@ -32,12 +32,6 @@
         "image/jpeg"
       ]
     },
-    "tag": {
-      "schema": "imageTag",
-      "dataFormats": [
-        "image/jpeg"
-      ]
-    },
     "caption": {
       "schema": "captionSchema",
       "dataFormats": [
@@ -61,15 +55,7 @@
             "who": "anyone",
             "can": "read"
           }
-        ],
-        "tag": {
-          "$actions": [
-            {
-              "who": "anyone",
-              "can": "read"
-            }
-          ]
-        }
+        ]
       }
     },
     "message": {

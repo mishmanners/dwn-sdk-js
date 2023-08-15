@@ -1,0 +1,71 @@
+{
+  "protocol": "http://deep-context.xyz",
+  "published": true,
+  "types": {
+    "foo": {
+      "schema": "foo",
+      "dataFormats": [
+        "application/json"
+      ]
+    },
+    "bar" : {
+      "schema": "bar",
+      "dataFormats": [
+        "image/jpeg"
+      ]
+    },
+    "baz": {
+      "schema": "baz",
+      "dataFormats": [
+        "text/plain"
+      ]
+    }
+  },
+  "structure": {
+    "foo": {
+      "$keep": 1,
+      "$actions": [
+        {
+          "who": "anyone",
+          "can": "read"
+        }
+      ],
+      "bar": {
+        "$keep": 10,
+        "$actions": [
+          {
+            "who": "anyone",
+            "can": "read"
+          }
+        ],
+        "baz": {
+          "$keep": 100,
+          "$actions": [
+            {
+              "who": "anyone",
+              "can": "read"
+            }
+          ],
+          "bar": {
+            "$keep": 10,
+            "$actions": [
+              {
+                "who": "anyone",
+                "can": "read"
+              }
+            ],
+            "foo": {
+              "$keep": 1,
+              "$actions": [
+                {
+                  "who": "anyone",
+                  "can": "read"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
