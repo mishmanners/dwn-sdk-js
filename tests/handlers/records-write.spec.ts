@@ -3,13 +3,14 @@ import type { GenerateFromRecordsWriteOut } from '../utils/test-data-generator.j
 import type { ProtocolDefinition } from '../../src/types/protocols-types.js';
 import type { QueryResultEntry } from '../../src/types/message-types.js';
 import type { RecordsWriteMessageWithOptionalEncodedData } from '../../src/store/storage-controller.js';
-import type { DataStore, EventLog, MessageStore, RecordsReadReply, RecordsWriteMessage } from '../../src/index.js';
+import type { DataStore, EventLog, MessageStore, RecordsQueryReply, RecordsReadReply, RecordsWriteMessage } from '../../src/index.js';
 
 import chaiAsPromised from 'chai-as-promised';
 import credentialIssuanceProtocolDefinition from '../vectors/protocol-definitions/credential-issuance.json' assert { type: 'json' };
 import dexProtocolDefinition from '../vectors/protocol-definitions/dex.json' assert { type: 'json' };
 import emailProtocolDefinition from '../vectors/protocol-definitions/email.json' assert { type: 'json' };
 import friendChatProtocol from '../vectors/protocol-definitions/friend-chat.json' assert { type: 'json' };
+import gameProtocol from '../vectors/protocol-definitions/game.json' assert { type: 'json' };
 import groupChatProtocol from '../vectors/protocol-definitions/group-chat.json' assert { type: 'json' };
 import messageProtocolDefinition from '../vectors/protocol-definitions/message.json' assert { type: 'json' };
 import minimalProtocolDefinition from '../vectors/protocol-definitions/minimal.json' assert { type: 'json' };
@@ -2110,7 +2111,7 @@ export function testRecordsWriteHandler(): void {
               author: alice,
               protocolDefinition
             });
-            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message);
             expect(protocolWriteReply.status.code).to.equal(202);
 
             const profileWrite = await TestDataGenerator.generateRecordsWrite({
@@ -2132,7 +2133,7 @@ export function testRecordsWriteHandler(): void {
               author: alice,
               protocolDefinition
             });
-            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message);
             expect(protocolWriteReply.status.code).to.equal(202);
 
             const messageWrite = await TestDataGenerator.generateRecordsWrite({
@@ -2153,7 +2154,7 @@ export function testRecordsWriteHandler(): void {
               author: alice,
               protocolDefinition
             });
-            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message);
             expect(protocolWriteReply.status.code).to.equal(202);
 
             for ( const profile of Array(10).fill({}).map((_,i) => new TextEncoder().encode(`profile-${i + 1}`))) {
@@ -2189,7 +2190,7 @@ export function testRecordsWriteHandler(): void {
               author: alice,
               protocolDefinition
             });
-            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message);
             expect(protocolWriteReply.status.code).to.equal(202);
 
             const profileWrite1 = await TestDataGenerator.generateRecordsWrite({
@@ -2242,7 +2243,7 @@ export function testRecordsWriteHandler(): void {
               author: alice,
               protocolDefinition
             });
-            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message, protocolsConfig.dataStream);
+            const protocolWriteReply = await dwn.processMessage(alice.did, protocolsConfig.message);
             expect(protocolWriteReply.status.code).to.equal(202);
 
             const profileMessage = await TestDataGenerator.generateRecordsWrite({
@@ -2290,6 +2291,115 @@ export function testRecordsWriteHandler(): void {
 
             const avatarReadReply2 = await dwn.processMessage(alice.did, avatarRead.message) as RecordsReadReply;
             expect(avatarReadReply2.status.code).to.equal(404);
+          });
+
+          it('should follow the $keep rules of the game', async () => {
+            const gameMaster = await DidKeyResolver.generate();
+
+            const protocolDefinition = { ...gameProtocol };
+            const protocolsConfig = await TestDataGenerator.generateProtocolsConfigure({
+              author: gameMaster,
+              protocolDefinition
+            });
+            const configure = await dwn.processMessage(gameMaster.did, protocolsConfig.message);
+            expect(configure.status.code).to.equal(202);
+
+            // set up game
+            const game = await TestDataGenerator.generateRecordsWrite({
+              author       : gameMaster,
+              protocol     : protocolDefinition.protocol,
+              protocolPath : 'game',
+              schema       : protocolDefinition.types.game.schema,
+              dataFormat   : protocolDefinition.types.game.dataFormats[0],
+              data         : new TextEncoder().encode(JSON.stringify({ game: 'some game' }))
+            });
+            const writeGameReply = await dwn.processMessage(gameMaster.did, game.message, game.dataStream);
+            expect(writeGameReply.status.code).to.equal(202);
+
+            // set up first round
+            const round1 = await TestDataGenerator.generateRecordsWrite({
+              author       : gameMaster,
+              protocol     : protocolDefinition.protocol,
+              protocolPath : 'game/round',
+              parentId     : game.message.recordId,
+              contextId    : game.message.recordId,
+              schema       : protocolDefinition.types.round.schema,
+              dataFormat   : protocolDefinition.types.round.dataFormats[0],
+              data         : new TextEncoder().encode(JSON.stringify({ round: 1 })),
+            });
+            const round1Reply = await dwn.processMessage(gameMaster.did, round1.message, round1.dataStream);
+            expect(round1Reply.status.code).to.equal(202);
+
+            // set up players
+            for (let i = 0; i < 10; i++) {
+              const playerWrite = await TestDataGenerator.generateRecordsWrite({
+                author       : gameMaster,
+                protocol     : protocolDefinition.protocol,
+                protocolPath : 'game/round/player',
+                parentId     : round1.message.recordId,
+                contextId    : round1.message.contextId,
+                schema       : protocolDefinition.types.player.schema,
+                dataFormat   : protocolDefinition.types.player.dataFormats[0],
+                data         : new TextEncoder().encode(JSON.stringify({ player: `player-${i + 1}` })),
+              });
+              const playerWriteReply = await dwn.processMessage(gameMaster.did, playerWrite.message, playerWrite.dataStream);
+              expect(playerWriteReply.status.code).to.equal(202);
+            }
+
+            // query for players
+            const playerQuery = await TestDataGenerator.generateRecordsQuery({
+              author : gameMaster,
+              filter : {
+                protocol     : protocolDefinition.protocol,
+                protocolPath : 'game/round/player'
+              }
+            });
+
+            const playerQueryReply = await dwn.processMessage(gameMaster.did, playerQuery.message) as RecordsQueryReply;
+            expect(playerQueryReply.status.code).to.equal(200);
+            expect(playerQueryReply.entries!.length).to.equal(protocolDefinition.structure.game.round.player.$keep);
+
+            // create 1 hand per player with 5 cards each
+            for (const player of playerQueryReply.entries!) {
+              const hand = await TestDataGenerator.generateRecordsWrite({
+                author       : gameMaster,
+                protocol     : protocolDefinition.protocol,
+                protocolPath : 'game/round/player/hand',
+                parentId     : player.recordId,
+                contextId    : player.contextId,
+                schema       : protocolDefinition.types.hand.schema,
+                dataFormat   : protocolDefinition.types.hand.dataFormats[0],
+                data         : new TextEncoder().encode(JSON.stringify({ player: `player-${player.recordId}` })),
+              });
+              const handReply = await dwn.processMessage(gameMaster.did, hand.message, hand.dataStream);
+              expect(handReply.status.code).to.equal(202);
+              for (let i = 0; i < 5; i++) {
+                const card = await TestDataGenerator.generateRecordsWrite({
+                  author       : gameMaster,
+                  protocol     : protocolDefinition.protocol,
+                  protocolPath : 'game/round/player/hand/card',
+                  parentId     : hand.message.recordId,
+                  contextId    : hand.message.contextId,
+                  schema       : protocolDefinition.types.card.schema,
+                  dataFormat   : protocolDefinition.types.card.dataFormats[0],
+                  data         : new TextEncoder().encode(JSON.stringify({ player: `player-${player.recordId}-card-${i + 1}` })),
+                });
+                const cardReply = await dwn.processMessage(gameMaster.did, card.message, card.dataStream);
+                expect(cardReply.status.code).to.equal(202);
+              }
+            }
+
+            // query all player cards
+            const allCardQuery = await TestDataGenerator.generateRecordsQuery({
+              author : gameMaster,
+              filter : {
+                protocol     : protocolDefinition.protocol,
+                protocolPath : 'game/round/player/hand/card'
+              }
+            });
+            const allCardsReply = await dwn.processMessage(gameMaster.did, allCardQuery.message);
+            expect(allCardsReply.status.code).to.equal(200);
+            expect(allCardsReply.entries!.length).to.equal(25);
           });
         });
       });

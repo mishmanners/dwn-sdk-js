@@ -2,7 +2,7 @@ import type { EventLog } from '../types/event-log.js';
 import type { GenericMessageReply } from '../core/message-reply.js';
 import type { MethodHandler } from '../types/method-handler.js';
 import type { RecordsWriteMessageWithOptionalEncodedData } from '../store/storage-controller.js';
-import type { DataStore, DidResolver, MessageStore } from '../index.js';
+import type { DataStore, DidResolver, Filter, MessageStore } from '../index.js';
 import type { RecordsDeleteMessage, RecordsWriteMessage } from '../types/records-types.js';
 
 import { authenticate } from '../core/auth.js';
@@ -59,11 +59,16 @@ export class RecordsWriteHandler implements MethodHandler {
     } else {
       // get existing messages for path
       // only write messages are tagged for protocols.
-      const query = {
+      const query: Filter = {
         interface    : DwnInterfaceName.Records,
         protocol     : message.descriptor.protocol!,
         protocolPath : message.descriptor.protocolPath!,
       };
+
+      if (message.descriptor.parentId !== undefined) {
+        query.parentId = message.descriptor.parentId;
+      }
+
       protocolPathMessages = await this.messageStore.query(tenant, query) as (RecordsWriteMessage|RecordsDeleteMessage)[];
       existingMessages = protocolPathMessages.filter( message => Records.getRecordId(message) === recordsWrite.message.recordId);
     }
