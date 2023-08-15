@@ -2,7 +2,7 @@ import type { MethodHandler } from '../types/method-handler.js';
 import type { RecordsWriteMessageWithOptionalEncodedData } from '../store/storage-controller.js';
 import type { DataStore, DidResolver, MessageStore } from '../index.js';
 import type { Filter, TimestampedMessage } from '../types/message-types.js';
-import type { RecordsReadDescriptor, RecordsReadMessage, RecordsReadReply } from '../types/records-types.js';
+import type { RecordsDeleteMessage, RecordsReadDescriptor, RecordsReadMessage, RecordsReadReply, RecordsWriteMessage } from '../types/records-types.js';
 
 import { authenticate } from '../core/auth.js';
 import { Message } from '../core/message.js';
@@ -40,7 +40,20 @@ export class RecordsReadHandler implements MethodHandler {
     // get existing messages matching `recordId` or `protocol` with `protocolPath` so we can perform authorization
     const query: Filter = RecordsReadHandler.createFilter(recordsRead.message.descriptor);
     const existingMessages = await this.messageStore.query(tenant, query) as TimestampedMessage[];
-    const newestExistingMessage = await Message.getNewestMessage(existingMessages);
+    let newestExistingMessage: TimestampedMessage | undefined;
+    if (recordsRead.message.descriptor.recordId !== undefined) {
+      newestExistingMessage = await Message.getNewestMessage(existingMessages);
+    } else {
+      // filter out messages that are not active (have recent deletes)
+      const activeMessages = existingMessages.reduce((acc: RecordsWriteMessage[], current: TimestampedMessage): RecordsWriteMessage[] => {
+        if (current.descriptor.method === DwnMethodName.Delete) {
+          return acc.filter(a => a.recordId !== (current as RecordsDeleteMessage).descriptor.recordId);
+        }
+        return acc;
+      }, existingMessages.filter(a => a.descriptor.method === DwnMethodName.Write) as RecordsWriteMessage[]);
+
+      newestExistingMessage = await Message.getNewestMessage(activeMessages);
+    }
 
     // if no record found or it has been deleted
     if (newestExistingMessage === undefined || newestExistingMessage.descriptor.method === DwnMethodName.Delete) {
