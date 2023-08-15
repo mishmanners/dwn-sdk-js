@@ -1,0 +1,53 @@
+{
+  "protocol": "http://game.xyz",
+  "published": true,
+  "types": {
+    "game": {
+      "schema": "cardGame",
+      "dataFormats": [
+        "application/json"
+      ]
+    },
+    "round": {
+      "schema": "gameRound",
+      "dataFormats": [
+        "application/json"
+      ]
+    },
+    "player": {
+      "schema": "gamePlayer",
+      "dataFormats": [
+        "application/json"
+      ]
+    },
+    "hand": {
+      "schema": "playerHand",
+      "dataFormats": [
+        "application/json"
+      ]
+    },
+    "card": {
+      "schema": "playerCard",
+      "dataFormats": [
+        "application/json"
+      ]
+    }
+  },
+  "structure": {
+    "game": {
+      "$keep": 1,
+      "round" : {
+        "$keep": 1,
+        "player": {
+          "$keep": 5,
+          "hand": {
+            "$keep": 1,
+            "card": {
+              "$keep": 5
+            }
+          }
+        }
+      }
+    }
+  }
+}
