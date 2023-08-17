@@ -42,7 +42,7 @@ describe('DataStoreLevel Test Suite', () => {
 
         expect(dataSize).to.equal(dataSizeInBytes);
 
-        const result = (await store.get(tenant, messageCid, dataCid))!;
+        const result = (await store.get(tenant, dataCid))!;
         const storedDataBytes = await DataStream.toBytes(result.dataStream);
 
         expect(storedDataBytes).to.eql(dataBytes);
@@ -84,10 +84,9 @@ describe('DataStoreLevel Test Suite', () => {
   describe('get', function () {
     it('should return `undefined if unable to find the data specified`', async () => {
       const tenant = await TestDataGenerator.randomCborSha256Cid();
-      const messageCid = await TestDataGenerator.randomCborSha256Cid();
 
       const randomCid = await TestDataGenerator.randomCborSha256Cid();
-      const result = await store.get(tenant, messageCid, randomCid);
+      const result = await store.get(tenant, randomCid);
 
       expect(result).to.be.undefined;
     });
@@ -105,7 +104,7 @@ describe('DataStoreLevel Test Suite', () => {
 
       expect(dataCid).to.not.equal(randomCid);
 
-      const result = await store.get(tenant, messageCid, randomCid);
+      const result = await store.get(tenant, randomCid);
 
       expect(result).to.be.undefined;
     });

@@ -65,14 +65,7 @@ export class DataStoreLevel implements DataStore {
     };
   }
 
-  public async get(tenant: string, messageCid: string, dataCid: string): Promise<GetResult | undefined> {
-    const blockstoreForReferenceCounting = await this.getBlockstoreForReferenceCounting(tenant, dataCid);
-
-    const allowed = await blockstoreForReferenceCounting.has(messageCid);
-    if (!allowed) {
-      return undefined;
-    }
-
+  public async get(tenant: string, dataCid: string): Promise<GetResult | undefined> {
     const blockstoreForData = await this.getBlockstoreForStoringData(tenant, dataCid);
 
     const exists = await blockstoreForData.has(dataCid);

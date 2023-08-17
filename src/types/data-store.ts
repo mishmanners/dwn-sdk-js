@@ -26,9 +26,8 @@ export interface DataStore {
   /**
    * Fetches the specified data.
    * The returned dataCid and returned dataSize will be verified against the given dataCid (and inferred dataSize).
-   * @param messageCid CID of the message that references the data.
    */
-  get(tenant: string, messageCid: string, dataCid: string): Promise<GetResult | undefined>;
+  get(tenant: string, dataCid: string): Promise<GetResult | undefined>;
 
   /**
    * Associates dataCid of existing data with the given messageCid.
