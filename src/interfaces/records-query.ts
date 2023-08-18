@@ -1,5 +1,5 @@
 import type { SignatureInput } from '../types/jws-types.js';
-import type { DateSort, Filter, RangeFilter } from '../types/message-types.js';
+import type { Filter, RangeFilter, RecordsDateSort } from '../types/message-types.js';
 import type { RecordsQueryDescriptor, RecordsQueryFilter, RecordsQueryMessage } from '../types/records-types.js';
 
 import { getCurrentTimeInHighPrecision } from '../utils/time.js';
@@ -12,7 +12,7 @@ import { normalizeProtocolUrl, normalizeSchemaUrl, validateProtocolUrlNormalized
 export type RecordsQueryOptions = {
   messageTimestamp?: string;
   filter: RecordsQueryFilter;
-  dateSort?: DateSort;
+  dateSort?: RecordsDateSort;
   authorizationSignatureInput?: SignatureInput;
 };
 

@@ -1,9 +1,9 @@
 import type { DidResolutionResult } from '../../src/did/did-resolver.js';
 import type { Readable } from 'readable-stream';
+import type { RecordsDateSort } from '../../src/types/message-types.js';
 import type { RecordsQueryFilter } from '../../src/types/records-types.js';
 import type {
   CreateFromOptions,
-  DateSort,
   DerivedPrivateJwk,
   EncryptionInput,
   EventsGetMessage,
@@ -158,7 +158,7 @@ export type GenerateRecordsQueryInput = {
   author?: Persona;
   messageTimestamp?: string;
   filter?: RecordsQueryFilter;
-  dateSort?: DateSort;
+  dateSort?: RecordsDateSort;
 };
 
 export type GenerateRecordsQueryOutput = {

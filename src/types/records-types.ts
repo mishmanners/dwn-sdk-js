@@ -4,7 +4,7 @@ import type { GenericMessageReply } from '../core/message-reply.js';
 import type { KeyDerivationScheme } from '../utils/hd-key.js';
 import type { PublicJwk } from './jose-types.js';
 import type { Readable } from 'readable-stream';
-import type { BaseAuthorizationPayload, DateSort, GenericMessage } from './message-types.js';
+import type { BaseAuthorizationPayload, GenericMessage, RecordsDateSort } from './message-types.js';
 import type { DwnInterfaceName, DwnMethodName } from '../core/message.js';
 
 export type RecordsWriteDescriptor = {
@@ -101,7 +101,7 @@ export type RecordsQueryDescriptor = {
   method: DwnMethodName.Query;
   messageTimestamp: string;
   filter: RecordsQueryFilter;
-  dateSort?: DateSort;
+  dateSort?: RecordsDateSort;
 };
 
 export type RecordsQueryFilter = {
