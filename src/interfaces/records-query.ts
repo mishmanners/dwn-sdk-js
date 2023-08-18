@@ -1,5 +1,5 @@
 import type { SignatureInput } from '../types/jws-types.js';
-import type { Filter, RangeFilter } from '../types/message-types.js';
+import type { DateSort, Filter, RangeFilter } from '../types/message-types.js';
 import type { RecordsQueryDescriptor, RecordsQueryFilter, RecordsQueryMessage } from '../types/records-types.js';
 
 import { getCurrentTimeInHighPrecision } from '../utils/time.js';
@@ -8,15 +8,6 @@ import { removeUndefinedProperties } from '../utils/object.js';
 import { validateAuthorizationIntegrity } from '../core/auth.js';
 import { DwnInterfaceName, DwnMethodName } from '../core/message.js';
 import { normalizeProtocolUrl, normalizeSchemaUrl, validateProtocolUrlNormalized, validateSchemaUrlNormalized } from '../utils/url.js';
-
-export enum DateSort {
-  CreatedAscending = 'createdAscending',
-  CreatedDescending = 'createdDescending',
-  PublishedAscending = 'publishedAscending',
-  PublishedDescending = 'publishedDescending',
-  TimestampAscending = 'timestampAscending',
-  TimestampDescending = 'timestampDescending'
-}
 
 export type RecordsQueryOptions = {
   messageTimestamp?: string;
