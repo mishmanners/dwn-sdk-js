@@ -1382,7 +1382,7 @@ export function testRecordsReadHandler(): void {
         expect(readReply.status.code).to.equal(404);
       });
 
-      it('should return 404 on read without `recordId` or `protocol` and `protocolPath` to be set', async () => {
+      it('should fail with 400 if neither `recordId` nor `protocol`+`protocolPath` are set', async () => {
         const alice = await DidKeyResolver.generate();
 
         // create with recordId to avoid the failure here
@@ -1918,26 +1918,24 @@ export function testRecordsReadHandler(): void {
     });
 
     describe('createFilter()', async () => {
-      it('should not throw if only `recordId` is set', async () => {
+      it('should set `recordId` filter when provided', async () => {
         const filter = RecordsReadHandler.createFilter({
           interface        : DwnInterfaceName.Records,
           method           : DwnMethodName.Read,
           messageTimestamp : '2023-08-19T00:00:00.000000Z',
-
-          recordId: 'some-id'
+          recordId         : 'some-id'
         });
 
         expect(filter['recordId']).to.equal('some-id');
       });
 
-      it('should not throw if `protocol` and `protocolPath` are set', async () => {
+      it('should set `protocol` and `protocolPath` filters when provided', async () => {
         const filter = RecordsReadHandler.createFilter({
           interface        : DwnInterfaceName.Records,
           method           : DwnMethodName.Read,
           messageTimestamp : '2023-08-19T00:00:00.000000Z',
-
-          protocol     : 'some-protocol',
-          protocolPath : 'protocol/path'
+          protocol         : 'some-protocol',
+          protocolPath     : 'protocol/path'
         });
 
         expect(filter['protocol']).to.equal('some-protocol');
@@ -1949,10 +1947,9 @@ export function testRecordsReadHandler(): void {
           interface        : DwnInterfaceName.Records,
           method           : DwnMethodName.Read,
           messageTimestamp : '2023-08-19T00:00:00.000000Z',
-
-          protocol     : 'some-protocol',
-          protocolPath : 'protocol/path',
-          recordId     : 'some-id'
+          protocol         : 'some-protocol',
+          protocolPath     : 'protocol/path',
+          recordId         : 'some-id'
         });
 
         expect(filter['recordId']).to.equal('some-id');
@@ -1960,6 +1957,7 @@ export function testRecordsReadHandler(): void {
         expect(filter['protocolPath']).to.be.undefined;
       });
     });
+
     it('should return 401 if signature check fails', async () => {
       const alice = await DidKeyResolver.generate();
       const recordsRead = await RecordsRead.create({
