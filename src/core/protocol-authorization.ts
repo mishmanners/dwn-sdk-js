@@ -89,7 +89,7 @@ export class ProtocolAuthorization {
       method    : DwnMethodName.Configure,
       protocol  : protocolUri
     };
-    const protocols = await messageStore.query(tenant, query) as ProtocolsConfigureMessage[];
+    const protocols = await messageStore.query(tenant, query, {}) as ProtocolsConfigureMessage[];
 
     if (protocols.length === 0) {
       throw new Error(`unable to find protocol definition for ${protocolUri}`);
@@ -131,7 +131,7 @@ export class ProtocolAuthorization {
         contextId,
         recordId  : currentParentId
       };
-      const parentMessages = await messageStore.query(tenant, query) as RecordsWriteMessage[];
+      const parentMessages = await messageStore.query(tenant, query, {}) as RecordsWriteMessage[];
 
       if (parentMessages.length === 0) {
         throw new Error(`no parent found with ID ${currentParentId}`);
@@ -353,7 +353,7 @@ export class ProtocolAuthorization {
         const query = {
           entryId: recordsWrite.message.recordId
         };
-        const result = await messageStore.query(tenant, query) as RecordsWriteMessage[];
+        const result = await messageStore.query(tenant, query, {}) as RecordsWriteMessage[];
 
         // check the author of the initial write matches the author of the incoming message
         const initialWrite = result[0];
@@ -427,7 +427,7 @@ export class ProtocolAuthorization {
       filter.contextId = recordsWrite.message.contextId!;
     }
 
-    const matchingRecordsWrites = await messageStore.query(tenant, filter);
+    const matchingRecordsWrites = await messageStore.query(tenant, filter, {});
 
     // There exists at least one message satisfying the actionRule
     return matchingRecordsWrites.length > 0;

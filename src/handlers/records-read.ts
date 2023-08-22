@@ -42,7 +42,7 @@ export class RecordsReadHandler implements MethodHandler {
       interface : DwnInterfaceName.Records,
       recordId  : message.descriptor.recordId
     };
-    const existingMessages = await this.messageStore.query(tenant, query) as TimestampedMessage[];
+    const existingMessages = await this.messageStore.query(tenant, query, {}) as TimestampedMessage[];
 
     const newestExistingMessage = await Message.getNewestMessage(existingMessages);
 

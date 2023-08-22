@@ -1,8 +1,10 @@
 import type { DidResolutionResult } from '../../src/did/did-resolver.js';
+import type { Pagination } from '../../src/types/message-types.js';
 import type { Readable } from 'readable-stream';
 import type { RecordsQueryFilter } from '../../src/types/records-types.js';
 import type {
   CreateFromOptions,
+  DateSort,
   DerivedPrivateJwk,
   EncryptionInput,
   EventsGetMessage,
@@ -29,7 +31,6 @@ import {
   KeyDerivationScheme,
   Records
 } from '../../src/index.js';
-import type { Pagination, RecordsDateSort } from '../../src/types/message-types.js';
 import type { PermissionConditions, PermissionScope, PermissionsGrantMessage, PermissionsRequestMessage, PermissionsRevokeMessage } from '../../src/types/permissions-types.js';
 import type { PrivateJwk, PublicJwk } from '../../src/types/jose-types.js';
 
@@ -158,7 +159,7 @@ export type GenerateRecordsQueryInput = {
   author?: Persona;
   messageTimestamp?: string;
   filter?: RecordsQueryFilter;
-  dateSort?: RecordsDateSort;
+  dateSort?: DateSort;
   pagination?: Pagination;
 };
 
@@ -819,14 +820,15 @@ export class TestDataGenerator {
    * @returns random UTC ISO-8601 timestamp
    */
   public static randomTimestamp(): string {
-    return Temporal.PlainDateTime.from({
-      year   : this.randomInt(2000, 2022),
-      month  : this.randomInt(1, 12),
-      day    : this.randomInt(1, 28),
-      hour   : this.randomInt(0, 23),
-      minute : this.randomInt(0, 59),
-      second : this.randomInt(0, 59),
-    }).toString({ smallestUnit: 'microseconds' }) + 'Z';
+    return Temporal.ZonedDateTime.from({
+      timeZone : 'UTC',
+      year     : this.randomInt(2000, 2022),
+      month    : this.randomInt(1, 12),
+      day      : this.randomInt(1, 28),
+      hour     : this.randomInt(0, 23),
+      minute   : this.randomInt(0, 59),
+      second   : this.randomInt(0, 59),
+    }).toInstant().toString({ smallestUnit: 'microseconds' });
   }
 
   /**
