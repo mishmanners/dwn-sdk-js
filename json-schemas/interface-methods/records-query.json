@@ -82,6 +82,20 @@
             }
           }
         },
+        "pagination": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "type": "number",
+              "minimum": 0
+            },
+            "offset": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
         "dateSort": {
           "enum": [
             "createdAscending",

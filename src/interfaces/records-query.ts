@@ -1,5 +1,5 @@
 import type { SignatureInput } from '../types/jws-types.js';
-import type { Filter, RangeFilter, RecordsDateSort } from '../types/message-types.js';
+import type { Filter, Pagination, RangeFilter, RecordsDateSort } from '../types/message-types.js';
 import type { RecordsQueryDescriptor, RecordsQueryFilter, RecordsQueryMessage } from '../types/records-types.js';
 
 import { getCurrentTimeInHighPrecision } from '../utils/time.js';
@@ -13,6 +13,7 @@ export type RecordsQueryOptions = {
   messageTimestamp?: string;
   filter: RecordsQueryFilter;
   dateSort?: RecordsDateSort;
+  pagination?: Pagination;
   authorizationSignatureInput?: SignatureInput;
 };
 
@@ -39,7 +40,8 @@ export class RecordsQuery extends Message<RecordsQueryMessage> {
       method           : DwnMethodName.Query,
       messageTimestamp : options.messageTimestamp ?? getCurrentTimeInHighPrecision(),
       filter           : RecordsQuery.normalizeFilter(options.filter),
-      dateSort         : options.dateSort
+      dateSort         : options.dateSort,
+      pagination       : options.pagination,
     };
 
     // delete all descriptor properties that are `undefined` else the code will encounter the following IPLD issue when attempting to generate CID:
