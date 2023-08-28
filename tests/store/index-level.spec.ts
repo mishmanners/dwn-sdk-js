@@ -4,6 +4,7 @@ import chai, { expect } from 'chai';
 import { ArrayUtility } from '../../src/utils/array.js';
 import { IndexLevel } from '../../src/store/index-level.js';
 import { lexicographicalCompare } from '../../src/utils/string.js';
+import { SortOrder } from '../../src/types/message-types.js';
 import { Temporal } from '@js-temporal/polyfill';
 import { TestDataGenerator } from '../utils/test-data-generator.js';
 import { v4 as uuid } from 'uuid';
@@ -27,15 +28,24 @@ describe('Index Level', () => {
       await index.close();
     });
 
-    it('adds 1 key per property aside from id', async () => {
+    it('adds 2 key per property aside from id', async () => {
       await index.put(uuid(), {
-        dateCreated : new Date().toISOString(),
-        'a'         : 'b',
-        'c'         : 'd'
+        'a' : 'b', // 2 records
+        'c' : 'd' // 2 records
       });
-
       const keys = await ArrayUtility.fromAsyncGenerator(index.db.keys());
-      expect(keys.length).to.equal(4);
+      expect(keys.length).to.equal(5);
+    });
+
+    // todo: optimize date fields to not need a separate index property
+    it('adds 2 additional keys per property aside from id when `dateCreated` index is passed', async () => {
+      await index.put(uuid(), {
+        dateCreated : new Date().toISOString(), // 4 records
+        'a'         : 'b', // 4 records
+        'c'         : 'd' // 4 records
+      });
+      const keys = await ArrayUtility.fromAsyncGenerator(index.db.keys());
+      expect(keys.length).to.equal(13);
     });
 
     it('flattens nested records', async () => {
@@ -49,7 +59,7 @@ describe('Index Level', () => {
       };
       await index.put(id, doc);
 
-      const key = await index.db.get(index['join']('some.nested.object', true, id));
+      const key = await index.db.get(index['join']('some.nested.object', true, '', id));
       expect(key).to.equal(id);
     });
 
@@ -90,7 +100,7 @@ describe('Index Level', () => {
         expect(e).to.equal('reason');
       }
 
-      const result = await index.query({ foo: 'bar' });
+      const result = await index.query({ foo: 'bar' }, {});
       expect(result.length).to.equal(0);
     });
 
@@ -147,7 +157,7 @@ describe('Index Level', () => {
       const result = await index.query({
         'a' : 'b',
         'c' : 'e'
-      });
+      }, {});
 
       expect(result.length).to.equal(1);
       expect(result[0]).to.equal(id3);
@@ -163,7 +173,7 @@ describe('Index Level', () => {
 
       const resp = await index.query({
         value: 'foo'
-      });
+      }, {});
 
       expect(resp.length).to.equal(0);
     });
@@ -190,7 +200,7 @@ describe('Index Level', () => {
 
       const resp = await index.query({
         a: [ 'a', 'b' ]
-      });
+      }, {});
 
       expect(resp.length).to.equal(2);
       expect(resp).to.include(id1);
@@ -211,7 +221,7 @@ describe('Index Level', () => {
         dateCreated: {
           gte: Temporal.PlainDateTime.from({ year: 2023, month: 1, day: 15 }).toString({ smallestUnit: 'microseconds' })
         }
-      });
+      }, {});
 
       expect(resp.length).to.equal(5);
     });
@@ -228,7 +238,7 @@ describe('Index Level', () => {
         value: {
           gte: 'foo'
         }
-      });
+      }, {});
 
       expect(resp.length).to.equal(1);
       expect(resp).to.include(id);
@@ -252,7 +262,7 @@ describe('Index Level', () => {
         foo: {
           lte: 'bar'
         }
-      });
+      }, {});
 
       expect(resp.length).to.equal(1);
       expect(resp).to.include(id1);
@@ -274,7 +284,7 @@ describe('Index Level', () => {
 
       const resp = await index.query({
         foo: true
-      });
+      }, {});
 
       expect(resp.length).to.equal(1);
       expect(resp).to.include(id1);
@@ -295,7 +305,7 @@ describe('Index Level', () => {
         }
         const resp = await index.query({
           digit: testNumbers.at(testIndex)!
-        });
+        }, {});
 
         expect(resp.length).to.equal(1);
         expect(resp.at(0)).to.equal(testNumbers.at(testIndex)!.toString());
@@ -308,7 +318,7 @@ describe('Index Level', () => {
         }
         const resp = await index.query({
           digit: 1
-        });
+        }, {});
 
         expect(resp.length).to.equal(0);
       });
@@ -325,7 +335,7 @@ describe('Index Level', () => {
             gte : lowerBound,
             lte : upperBound
           }
-        });
+        }, {});
 
         const testResults = testNumbers.filter( n => n >= lowerBound && n <= upperBound).map(n => n.toString());
         expect(resp.sort()).to.eql(testResults.sort());
@@ -343,7 +353,7 @@ describe('Index Level', () => {
             gte : lowerBound,
             lte : upperBound
           }
-        });
+        }, {});
 
         const testResults = testNumbers.filter( n => n >= lowerBound && n <= upperBound).map(n => n.toString());
         expect(resp.sort()).to.eql(testResults.sort());
@@ -360,7 +370,7 @@ describe('Index Level', () => {
           digit: {
             gt: lowerBound,
           }
-        });
+        }, {});
 
         const testResults = testNumbers.filter( n => n > lowerBound).map(n => n.toString());
         expect(resp.sort()).to.eql(testResults.sort());
@@ -377,7 +387,7 @@ describe('Index Level', () => {
           digit: {
             gt: lowerBound,
           }
-        });
+        }, {});
 
         const testResults = testNumbers.filter( n => n > lowerBound).map(n => n.toString());
         expect(resp.sort()).to.eql(testResults.sort());
@@ -394,7 +404,7 @@ describe('Index Level', () => {
           digit: {
             lt: upperBound,
           }
-        });
+        }, {});
 
         const testResults = testNumbers.filter( n => n < upperBound).map(n => n.toString());
         expect(resp.sort()).to.eql(testResults.sort());
@@ -411,7 +421,7 @@ describe('Index Level', () => {
           digit: {
             lt: upperBound,
           }
-        });
+        }, {});
 
         const testResults = testNumbers.filter( n => n < upperBound).map(n => n.toString());
         expect(resp.sort()).to.eql(testResults.sort());
@@ -449,7 +459,7 @@ describe('Index Level', () => {
       await index.put(id1, doc1);
       await index.put(id2, doc2);
 
-      let result = await index.query({ 'a': 'b', 'c': 'd' });
+      let result = await index.query({ 'a': 'b', 'c': 'd' }, {});
 
       expect(result.length).to.equal(2);
       expect(result).to.contain(id1);
@@ -457,7 +467,7 @@ describe('Index Level', () => {
       await index.delete(id1);
 
 
-      result = await index.query({ 'a': 'b', 'c': 'd' });
+      result = await index.query({ 'a': 'b', 'c': 'd' }, {});
 
       expect(result.length).to.equal(1);
     });
@@ -479,11 +489,210 @@ describe('Index Level', () => {
         expect(e).to.equal('reason');
       }
 
-      const result = await index.query({ foo: 'bar' });
+      const result = await index.query({ foo: 'bar' }, {});
       expect(result.length).to.equal(1);
       expect(result).to.contain(id);
     });
   });
+
+
+  describe('sort', () => {
+    before(async () => {
+      index = new IndexLevel({ location: 'TEST-INDEX' });
+      await index.open();
+    });
+
+    beforeEach(async () => {
+      await index.clear();
+    });
+
+    after(async () => {
+      await index.close();
+    });
+
+    const date15 = Temporal.PlainDateTime.from({ year: 2023, month: 1, day: 15 }).toString({ smallestUnit: 'microseconds' });
+    const date16 = Temporal.PlainDateTime.from({ year: 2023, month: 1, day: 16 }).toString({ smallestUnit: 'microseconds' });
+    const date17 = Temporal.PlainDateTime.from({ year: 2023, month: 1, day: 17 }).toString({ smallestUnit: 'microseconds' });
+    const date18 = Temporal.PlainDateTime.from({ year: 2023, month: 1, day: 18 }).toString({ smallestUnit: 'microseconds' });
+    const date19 = Temporal.PlainDateTime.from({ year: 2023, month: 1, day: 19 }).toString({ smallestUnit: 'microseconds' });
+    const date20 = Temporal.PlainDateTime.from({ year: 2023, month: 1, day: 20 }).toString({ smallestUnit: 'microseconds' });
+    const date21 = Temporal.PlainDateTime.from({ year: 2023, month: 1, day: 21 }).toString({ smallestUnit: 'microseconds' });
+    const date22 = Temporal.PlainDateTime.from({ year: 2023, month: 1, day: 22 }).toString({ smallestUnit: 'microseconds' });
+    const date23 = Temporal.PlainDateTime.from({ year: 2023, month: 1, day: 23 }).toString({ smallestUnit: 'microseconds' });
+
+    const testCases = [{
+      id            : 'first',
+      someType      : 'test',
+      otherProp     : 'some',
+      dateCreated   : date15,
+      datePublished : date23,
+    },{
+      id            : 'second',
+      someType      : 'test',
+      otherProp     : 'other',
+      dateCreated   : date16,
+      datePublished : date22,
+    },{
+      id            : 'third',
+      someType      : 'test',
+      otherProp     : 'prop',
+      dateCreated   : date17,
+      datePublished : date21,
+    },{
+      id            : 'fourth',
+      someType      : 'test',
+      otherProp     : 'some',
+      dateCreated   : date18,
+      datePublished : date20,
+    },{
+      id            : 'fifth',
+      someType      : 'test',
+      otherProp     : 'other',
+      dateCreated   : date19,
+      datePublished : date19,
+    },{
+      id            : 'sixth',
+      someType      : 'test',
+      otherProp     : 'prop',
+      dateCreated   : date20,
+      datePublished : date18,
+    },{
+      id            : 'seventh',
+      someType      : 'test',
+      otherProp     : 'some',
+      dateCreated   : date21,
+      datePublished : date17,
+    },{
+      id            : 'eighth',
+      someType      : 'test',
+      otherProp     : 'other',
+      dateCreated   : date22,
+      datePublished : date16,
+    },{
+      id            : 'ninth',
+      someType      : 'test',
+      otherProp     : 'prop',
+      dateCreated   : date23,
+      datePublished : date15,
+    }];
+
+    it('sorts by created ascending', async () => {
+      await Promise.all(testCases.map(t => index.put(t.id, t)));
+      const resp = await index.query({
+        someType: 'test',
+      }, { dateCreated: SortOrder.Ascending });
+
+      const testAgainst = testCases.sort((a,b) => lexicographicalCompare(a.dateCreated, b.dateCreated));
+      expect(resp.length).to.equal(testAgainst.length);
+      resp.forEach((id, index) => {
+        expect(id).to.equal(testAgainst[index].id);
+      });
+    });
+
+    it('sorts by published ascending', async () => {
+      await Promise.all(testCases.map(t => index.put(t.id, t)));
+      const resp = await index.query({
+        someType: 'test',
+      }, { datePublished: SortOrder.Ascending });
+
+
+      const testAgainst = testCases.sort((a,b) => lexicographicalCompare(a.datePublished, b.datePublished));
+      expect(resp.length).to.equal(testAgainst.length);
+      resp.forEach((id, index) => {
+        expect(id).to.equal(testAgainst[index].id);
+      });
+    });
+
+    it('sorts by created descending', async () => {
+      await Promise.all(testCases.map(t => index.put(t.id, t)));
+      const resp = await index.query({
+        someType: 'test',
+      }, { dateCreated: SortOrder.Descending });
+
+      const testAgainst = testCases.sort((a,b) => lexicographicalCompare(b.dateCreated, a.dateCreated));
+      expect(resp.length).to.equal(testAgainst.length);
+      resp.forEach((id, index) => {
+        expect(id).to.equal(testAgainst[index].id);
+      });
+    });
+
+    it('sorts by published descending', async () => {
+      await Promise.all(testCases.map(t => index.put(t.id, t)));
+      const resp = await index.query({
+        someType: 'test',
+      }, { datePublished: SortOrder.Descending });
+
+      const testAgainst = testCases.sort((a,b) => lexicographicalCompare(b.datePublished, a.datePublished));
+      expect(resp.length).to.equal(testCases.length);
+      resp.forEach((id, index) => {
+        expect(id).to.equal(testAgainst[index].id);
+      });
+    });
+
+    it('sorts by created ascending within range', async () => {
+      const low = 2;
+      const high = 6;
+      await Promise.all(testCases.map(t => index.put(t.id, t)));
+      const resp = await index.query({
+        someType    : 'test',
+        dateCreated : {
+          gte : testCases[low].dateCreated,
+          lte : testCases[high].dateCreated,
+        },
+      }, { dateCreated: SortOrder.Ascending });
+
+      const partial = testCases.filter((_,i) => i >= low && i <= high).sort((a,b) => lexicographicalCompare(a.dateCreated, b.dateCreated));
+      expect(resp.length).to.equal(partial.length);
+      resp.forEach((id, index) => {
+        expect(id).to.equal(partial[index].id);
+      });
+    });
+
+    it('sorts by created descending within range', async () => {
+      const low = 2;
+      const high = 6;
+      await Promise.all(testCases.map(t => index.put(t.id, t)));
+      const resp = await index.query({
+        someType    : 'test',
+        dateCreated : {
+          gte : testCases[low].dateCreated,
+          lte : testCases[high].dateCreated,
+        },
+      }, { dateCreated: SortOrder.Descending });
+
+      const partial = testCases.filter((_,i) => i >= low && i <= high).sort((a,b) => lexicographicalCompare(b.dateCreated, a.dateCreated));
+      expect(resp.length).to.equal(partial.length);
+      resp.forEach((id, index) => {
+        expect(id).to.equal(partial[index].id);
+      });
+    });
+
+    it('sorts on multiple properties', async () => {
+      const low = 1;
+      const high = 8;
+      await Promise.all(testCases.map(t => index.put(t.id, t)));
+      const resp = await index.query({
+        otherProp   : 'some',
+        dateCreated : {
+          gte : testCases[low].dateCreated,
+          lte : testCases[high].dateCreated,
+        }
+      }, { datePublished: SortOrder.Ascending });
+
+      const partial = testCases
+        .filter(v => v.otherProp === 'some')
+        .filter((v) =>
+          lexicographicalCompare(v.dateCreated, testCases[low].dateCreated) >= 0 &&
+          lexicographicalCompare(v.dateCreated, testCases[high].dateCreated) <= 0 )
+        .sort((a,b) => lexicographicalCompare(b.datePublished, a.datePublished));
+      expect(resp.length).to.equal(partial.length);
+      resp.forEach((id, index) => {
+        expect(id).to.equal(partial[index].id);
+      });
+    });
+
+  });
+
 
   describe('encodeNumberValue', () => {
     it('should encode positive digits and pad with leading zeros', () => {

@@ -1,11 +1,18 @@
-import type { Filter, RangeFilter } from '../types/message-types.js';
+import type { Filter, MessageSort, Pagination, RangeFilter } from '../types/message-types.js';
 import type { LevelWrapperBatchOperation, LevelWrapperIteratorOptions } from './level-wrapper.js';
 
 import { flatten } from '../utils/object.js';
+import { SortOrder } from '../types/message-types.js';
 import { createLevelDatabase, LevelWrapper } from './level-wrapper.js';
 
 export interface IndexLevelOptions {
   signal?: AbortSignal;
+}
+
+interface SortIndexes {
+  messageTimestamp?: string
+  dateCreated?: string
+  datePublished?: string
 }
 
 /**
@@ -33,6 +40,27 @@ export class IndexLevel {
     return this.db.close();
   }
 
+  private matchPrefix(propertyName: string, sort: MessageSort = {}, propertyValue?: unknown): string {
+    const parts = [];
+    const { messageTimestamp, dateCreated, datePublished } = sort;
+
+    if (dateCreated !== undefined) {
+      parts.push( dateCreated === SortOrder.Ascending ? '__dateCreated' : '__dateCreated_descending', propertyName);
+    } else if (datePublished !== undefined) {
+      parts.push( datePublished === SortOrder.Ascending ? '__datePublished' : '__datePublished_descending', propertyName);
+    } else if (messageTimestamp !== undefined && messageTimestamp === SortOrder.Descending) {
+      parts.push('__descending', propertyName);
+    } else {
+      parts.push(propertyName);
+    }
+
+    if (propertyValue !== undefined) {
+      parts.push(this.encodeValue(propertyValue));
+    }
+
+    return this.join(...parts);
+  }
+
   /**
    * Adds indexes for a specific data/object/content.
    * @param dataId ID of the data/object/content being indexed.
@@ -50,19 +78,7 @@ export class IndexLevel {
     // create an index entry for each property in the `indexes`
     for (const propertyName in indexes) {
       const propertyValue = indexes[propertyName];
-
-      // NOTE: appending data ID after (property + value) serves two purposes:
-      // 1. creates a unique entry of the property-value pair per data/object
-      // 2. when we need to delete all indexes of a given data ID (`delete()`), we can reconstruct the index keys and remove the indexes efficiently
-      //
-      // example keys (\u0000 is just shown for illustration purpose because it is the delimiter used to join the string segments below):
-      // 'interface\u0000"Records"\u0000bafyreigs3em7lrclhntzhgvkrf75j2muk6e7ypq3lrw3ffgcpyazyw6pry'
-      // 'method\u0000"Write"\u0000bafyreigs3em7lrclhntzhgvkrf75j2muk6e7ypq3lrw3ffgcpyazyw6pry'
-      // 'schema\u0000"http://ud4kyzon6ugxn64boz7v"\u0000bafyreigs3em7lrclhntzhgvkrf75j2muk6e7ypq3lrw3ffgcpyazyw6pry'
-      // 'dataCid\u0000"bafkreic3ie3cxsblp46vn3ofumdnwiqqk4d5ah7uqgpcn6xps4skfvagze"\u0000bafyreigs3em7lrclhntzhgvkrf75j2muk6e7ypq3lrw3ffgcpyazyw6pry'
-      // 'dateCreated\u0000"2023-05-25T18:23:29.425008Z"\u0000bafyreigs3em7lrclhntzhgvkrf75j2muk6e7ypq3lrw3ffgcpyazyw6pry'
-      const key = this.join(propertyName, this.encodeValue(propertyValue), dataId);
-      operations.push({ type: 'put', key, value: dataId });
+      operations.push(...this.indexOperations(propertyName, propertyValue, dataId, this.sortIndexes(indexes)));
     }
 
     // create a reverse lookup entry for data ID -> its indexes
@@ -73,7 +89,64 @@ export class IndexLevel {
     await this.db.batch(operations, options);
   }
 
-  async query(filter: Filter, options?: IndexLevelOptions): Promise<Array<string>> {
+  private indexOperations(propertyName: string, propertyValue: unknown, dataId: string, sort: SortIndexes): LevelWrapperBatchOperation<string>[] {
+    // should probably fail if there is no messageTimestamp?
+    const { messageTimestamp, dateCreated, datePublished } = sort;
+
+    const operations: LevelWrapperBatchOperation<string>[] = [ ];
+
+    const key = this.join(propertyName, this.encodeValue(propertyValue), messageTimestamp || '', dataId); // default
+    operations.push({ type: 'put', key, value: dataId });
+    const descendingKey = this.join('__descending', propertyName, this.encodeValue(propertyValue), this.descendingTimestampKey(messageTimestamp), dataId);
+    operations.push({ type: 'put', key: descendingKey, value: dataId });
+
+    // no need to double-index the dates the dates themselves
+    if (dateCreated !== undefined) {
+      const key = this.join('__dateCreated', propertyName, this.encodeValue(propertyValue), dateCreated, dataId);
+      operations.push({ type: 'put', key, value: dataId });
+      const descendingKey = this.join('__dateCreated_descending', propertyName, this.encodeValue(propertyValue), this.descendingTimestampKey(dateCreated), dataId);
+      operations.push({ type: 'put', key: descendingKey, value: dataId });
+    }
+
+    // no need to double-index the dates the dates themselves
+    if (datePublished !== undefined) {
+      const key = this.join('__datePublished', propertyName, this.encodeValue(propertyValue), datePublished, dataId);
+      operations.push({ type: 'put', key, value: dataId });
+
+      const descendingKey = this.join('__datePublished_descending', propertyName, this.encodeValue(propertyValue), this.descendingTimestampKey(datePublished), dataId);
+      operations.push({ type: 'put', key: descendingKey, value: dataId });
+    }
+    return operations;
+  }
+
+  private descendingTimestampKey(timeStamp?: string): string {
+    if (timeStamp === undefined) {
+      return '';
+    }
+    const unixTime = Date.parse(timeStamp);
+    if (isNaN(unixTime)) {
+      return '';
+    }
+
+    return (Number.MAX_SAFE_INTEGER - unixTime).toString().padStart(16, '0');
+  }
+
+  private sortIndexes(indexes: { [property: string]: unknown}): SortIndexes {
+    const { messageTimestamp, dateCreated, datePublished } = indexes;
+
+    return {
+      messageTimestamp : messageTimestamp ? messageTimestamp as string : undefined,
+      dateCreated      : dateCreated ? dateCreated as string : undefined,
+      datePublished    : datePublished ? datePublished as string : undefined,
+    };
+  }
+
+  async query(
+    filter: Filter,
+    dateSort: MessageSort,
+    pagination?: Pagination,
+    options?: IndexLevelOptions,
+  ): Promise<Array<string>> {
     // Note: We have an array of Promises in order to support OR (anyOf) matches when given a list of accepted values for a property
     const propertyNameToPromises: { [key: string]: Promise<string[]>[] } = {};
 
@@ -90,17 +163,17 @@ export class IndexLevel {
           // then adding them to the promises associated with `propertyName`
           propertyNameToPromises[propertyName] = [];
           for (const propertyValue of new Set(propertyFilter)) {
-            const exactMatchesPromise = this.findExactMatches(propertyName, propertyValue, options);
+            const exactMatchesPromise = this.findExactMatches(propertyName, propertyValue, dateSort, options);
             propertyNameToPromises[propertyName].push(exactMatchesPromise);
           }
         } else {
           // `propertyFilter` is a `RangeFilter`
-          const rangeMatchesPromise = this.findRangeMatches(propertyName, propertyFilter, options);
+          const rangeMatchesPromise = this.findRangeMatches(propertyName, propertyFilter, dateSort, options);
           propertyNameToPromises[propertyName] = [rangeMatchesPromise];
         }
       } else {
         // propertyFilter is an EqualFilter, meaning it is a non-object primitive type
-        const exactMatchesPromise = this.findExactMatches(propertyName, propertyFilter, options);
+        const exactMatchesPromise = this.findExactMatches(propertyName, propertyFilter, dateSort, options);
         propertyNameToPromises[propertyName] = [exactMatchesPromise];
       }
     }
@@ -137,13 +210,27 @@ export class IndexLevel {
     }
 
     const indexes = JSON.parse(serializedIndexes);
-
+    const { messageTimestamp, dateCreated, datePublished } = this.sortIndexes(indexes);
     // delete all indexes associated with the data of the given ID
     const ops: LevelWrapperBatchOperation<string>[] = [ ];
     for (const propertyName in indexes) {
       const propertyValue = indexes[propertyName];
-      const key = this.join(propertyName, this.encodeValue(propertyValue), dataId);
+      const key = this.join(propertyName, this.encodeValue(propertyValue), messageTimestamp || '', dataId);
       ops.push({ type: 'del', key });
+      const descendingKey = this.join('__descending', propertyName, this.encodeValue(propertyValue), this.descendingTimestampKey(messageTimestamp), dataId);
+      ops.push({ type: 'del', key: descendingKey });
+      if (dateCreated !== undefined) {
+        const key = this.join('__dateCreated', propertyName, this.encodeValue(propertyValue), dateCreated, dataId);
+        ops.push({ type: 'del', key });
+        const descendingKey = this.join('__dateCreated_descending', propertyName, this.encodeValue(propertyValue), this.descendingTimestampKey(dateCreated), dataId);
+        ops.push({ type: 'del', key: descendingKey });
+      }
+      if (datePublished !== undefined) {
+        const key = this.join('__datePublished', propertyName, this.encodeValue(propertyValue), datePublished, dataId);
+        ops.push({ type: 'del', key });
+        const descendingKey = this.join('__datePublished_descending', propertyName, this.encodeValue(propertyValue), this.descendingTimestampKey(datePublished), dataId);
+        ops.push({ type: 'del', key: descendingKey });
+      }
     }
 
     ops.push({ type: 'del', key: `__${dataId}__indexes` });
@@ -158,11 +245,11 @@ export class IndexLevel {
   /**
    * @returns IDs of data that matches the exact property and value.
    */
-  private async findExactMatches(propertyName: string, propertyValue: unknown, options?: IndexLevelOptions): Promise<string[]> {
-    const propertyValuePrefix = this.join(propertyName, this.encodeValue(propertyValue), '');
+  private async findExactMatches(propertyName: string, propertyValue: unknown, sort: MessageSort, options?: IndexLevelOptions): Promise<string[]> {
+    const propertyValuePrefix = this.matchPrefix(propertyName, sort, propertyValue);
 
     const iteratorOptions: LevelWrapperIteratorOptions<string> = {
-      gt: propertyValuePrefix
+      gte: propertyValuePrefix
     };
 
     const matches: string[] = [];
@@ -179,21 +266,48 @@ export class IndexLevel {
   /**
    * @returns IDs of data that matches the range filter.
    */
-  private async findRangeMatches(propertyName: string, rangeFilter: RangeFilter, options?: IndexLevelOptions): Promise<string[]> {
+  private async findRangeMatches(
+    propertyName: string,
+    rangeFilter: RangeFilter,
+    sort: MessageSort,
+    options?: IndexLevelOptions
+  ): Promise<string[]> {
     const iteratorOptions: LevelWrapperIteratorOptions<string> = {};
+
+    const { order, field } = IndexLevel.extractSortInfo(sort);
+    //always sort in ascending order for ranges and use the reverse iterator.
+    const prefixOrder = order === SortOrder.Descending ? { [field]: SortOrder.Ascending } : sort;
+    const propertyPrefix = this.matchPrefix(propertyName, prefixOrder);
 
     for (const comparator in rangeFilter) {
       const comparatorName = comparator as keyof RangeFilter;
-      iteratorOptions[comparatorName] = this.join(propertyName, this.encodeValue(rangeFilter[comparatorName]));
+      const comparatorValue = rangeFilter[comparatorName];
+      if (!comparatorValue) {
+        continue;
+      }
+      iteratorOptions[comparatorName] = this.matchPrefix(propertyName, prefixOrder, comparatorValue);
     }
 
     // if there is no lower bound specified (`gt` or `gte`), we need to iterate from the upper bound,
     // so that we will iterate over all the matches before hitting mismatches.
-    if (iteratorOptions.gt === undefined && iteratorOptions.gte === undefined) {
+    if (iteratorOptions.gt === undefined && iteratorOptions.gte === undefined && order !== SortOrder.Descending) {
+      iteratorOptions.reverse = true;
+    } else if (order === SortOrder.Descending) {
       iteratorOptions.reverse = true;
     }
 
+    let lteValue: string | undefined;
+    if ('lte' in rangeFilter) {
+      for (const dataId of await this.findExactMatches(propertyName, rangeFilter.lte, sort, options)) {
+        lteValue = dataId;
+      }
+    }
+
     const matches: string[] = [];
+    if (lteValue && order === SortOrder.Descending) {
+      matches.push(lteValue);
+    }
+
     for await (const [ key, dataId ] of this.db.iterator(iteratorOptions, options)) {
       // if "greater-than" is specified, skip all keys that contains the exact value given in the "greater-than" condition
       if ('gt' in rangeFilter && IndexLevel.extractValueFromKey(key) === this.encodeValue(rangeFilter.gt)) {
@@ -201,22 +315,15 @@ export class IndexLevel {
       }
 
       // immediately stop if we arrive at an index entry for a different property
-      if (!key.startsWith(propertyName)) {
+      if (!key.startsWith(propertyPrefix)) {
         break;
       }
 
       matches.push(dataId);
     }
 
-    if ('lte' in rangeFilter) {
-      // When `lte` is used, we must also query the exact match explicitly because the exact match will not be included in the iterator above.
-      // This is due to the extra data (CID) appended to the (property + value) key prefix, e.g.
-      // key = 'dateCreated\u0000"2023-05-25T11:22:33.000000Z"\u0000bafyreigs3em7lrclhntzhgvkrf75j2muk6e7ypq3lrw3ffgcpyazyw6pry'
-      // the value would be considered greater than { lte: `dateCreated\u0000"2023-05-25T11:22:33.000000Z"` } used in the iterator options,
-      // thus would not be included in the iterator even though we'd like it to be.
-      for (const dataId of await this.findExactMatches(propertyName, rangeFilter.lte, options)) {
-        matches.push(dataId);
-      }
+    if (lteValue && order === SortOrder.Ascending) {
+      matches.push(lteValue);
     }
 
     return matches;
@@ -233,6 +340,14 @@ export class IndexLevel {
     default:
       return String(value);
     }
+  }
+
+  private static extractSortInfo(sort: MessageSort): { order: SortOrder, field: string} {
+    const key = Object.keys(sort).at(0);
+    if (key === undefined) {
+      return { order: SortOrder.Ascending, field: 'messageTimestamp' };
+    }
+    return { order: sort[key], field: key };
   }
 
   /**

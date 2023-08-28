@@ -263,7 +263,6 @@ export function testMessageStore(): void {
 
           const sortedRecords = messages.sort((a,b) =>
             lexicographicalCompare(b.message.descriptor.datePublished!, a.message.descriptor.datePublished!));
-
           for (let i = 0; i < messages.length; i++) {
             expect(await Message.getCid(sortedRecords[i].message)).to.equal(await Message.getCid(messageQuery[i]));
           }

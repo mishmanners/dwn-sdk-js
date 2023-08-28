@@ -93,14 +93,15 @@ export class MessageStoreLevel implements MessageStore {
 
     const messages: GenericMessage[] = [];
 
-    const resultIds = await this.index.query({ ...filter, tenant }, options);
+    const resultIds = await this.index.query({ ...filter, tenant }, dateSort, pagination, options);
 
     for (const id of resultIds) {
       const message = await this.get(tenant, id, options);
       if (message) { messages.push(message); }
     }
 
-    const sortedRecords = this.sortRecords(messages, dateSort);
+    // const sortedRecords = this.sortRecords(messages, dateSort);
+    const sortedRecords = messages;
     return this.paginateRecords(sortedRecords, pagination);
   }
 
