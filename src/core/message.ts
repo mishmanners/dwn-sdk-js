@@ -1,4 +1,5 @@
 import type { GeneralJws } from '../types/jws-types.js';
+import type { RecordsWriteMessage } from '../index.js';
 import type { SignatureInput } from '../types/jws-types.js';
 import type { BaseAuthorizationPayload, Descriptor, GenericMessage, TimestampedMessage } from '../types/message-types.js';
 
@@ -215,4 +216,11 @@ export abstract class Message<M extends GenericMessage> {
     // compare the `dataCid` instead, the < and > operators compare strings in lexicographical order
     return Message.compareCid(a, b);
   }
+
+  public static getRecordId(message: TimestampedMessage): string | undefined {
+    if (message.descriptor.interface === DwnInterfaceName.Records && message.descriptor.method === DwnMethodName.Write) {
+      return (message as RecordsWriteMessage).recordId;
+    }
+  }
+
 }

@@ -36,6 +36,30 @@ export class StorageController {
   }
 
 
+  public static async purgeDescendants(
+    tenant: string,
+    parentRecordId: string,
+    messageStore: MessageStore,
+    dataStore: DataStore,
+    eventLog: EventLog
+  ): Promise<void> {
+    const deletedMessageCids: string[] = [];
+    const recordIds: string[] = [];
+    const messages = await messageStore.query(tenant, { parentId: parentRecordId });
+    for (const message of messages) {
+      await StorageController.delete(messageStore, dataStore, tenant, message);
+      const messageCid = await Message.getCid(message);
+      const recordId = Message.getRecordId(message);
+      deletedMessageCids.push(messageCid);
+      if (recordId) {
+        recordIds.push(recordId);
+      }
+    }
+    await eventLog.deleteEventsByCid(tenant, deletedMessageCids);
+    await Promise.all(recordIds.map(recordId => this.purgeDescendants(tenant, recordId, messageStore, dataStore, eventLog)));
+  }
+
+
   /**
    * Deletes all messages in `existingMessages` that are older than the `comparedToMessage` in the given tenant,
    * but keep the initial write write for future processing by ensuring its `isLatestBaseState` index is "false".
@@ -128,6 +152,10 @@ export class StorageController {
       const messageCid = await Message.getCid(message);
       await StorageController.delete(messageStore, dataStore, tenant, message);
       deletedMessageCids.push(messageCid);
+      const recordId = Message.getRecordId(message);
+      if (recordId) {
+        await this.purgeDescendants(tenant, recordId, messageStore, dataStore, eventLog);
+      }
     }
     await eventLog.deleteEventsByCid(tenant, deletedMessageCids);
   }
