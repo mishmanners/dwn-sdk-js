@@ -5,10 +5,13 @@ import { getCurrentTimeInHighPrecision } from '../utils/time.js';
 import { validateAuthorizationIntegrity } from '../core/auth.js';
 import { DwnInterfaceName, DwnMethodName, Message } from '../core/message.js';
 
-export type EventsGetOptions = {
+type EventsGetUnsignedOptions = {
   watermark?: string;
-  authorizationSignatureInput: SignatureInput;
   messageTimestamp?: string;
+};
+
+export type EventsGetOptions = EventsGetUnsignedOptions & {
+  authorizationSignatureInput: SignatureInput;
 };
 
 export class EventsGet extends Message<EventsGetMessage> {
@@ -37,5 +40,9 @@ export class EventsGet extends Message<EventsGetMessage> {
     Message.validateJsonSchema(message);
 
     return new EventsGet(message);
+  }
+
+  public static async createUnsigned(options: EventsGetUnsignedOptions): Promise<UnsignedEventsGetMessage> {
+
   }
 }

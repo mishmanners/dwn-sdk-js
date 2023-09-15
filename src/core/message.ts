@@ -8,6 +8,11 @@ import { Jws } from '../utils/jws.js';
 import { lexicographicalCompare } from '../utils/string.js';
 import { removeUndefinedProperties } from '../utils/object.js';
 import { validateJsonSchema } from '../schema-validator.js';
+import { DwnError, DwnErrorCode, EventsGet, EventsGetMessage, EventsGetOptions, MessagesGet, MessagesGetMessage, MessagesGetOptions, PermissionsGrant, PermissionsGrantDescriptor, PermissionsGrantMessage, PermissionsGrantOptions, PermissionsRequest, PermissionsRequestDescriptor, PermissionsRequestMessage, PermissionsRequestOptions, PermissionsRevoke, PermissionsRevokeDescriptor, PermissionsRevokeMessage, PermissionsRevokeOptions, ProtocolsConfigure, ProtocolsConfigureDescriptor, ProtocolsConfigureMessage, ProtocolsConfigureOptions, ProtocolsQuery, ProtocolsQueryMessage, ProtocolsQueryOptions, RecordsDelete, RecordsDeleteMessage, RecordsDeleteOptions, RecordsQuery, RecordsQueryMessage, RecordsQueryOptions, RecordsRead, RecordsReadOptions, RecordsWrite, RecordsWriteMessage, RecordsWriteOptions } from '../index.js';
+import { RecordsDeleteDescriptor, RecordsQueryDescriptor, RecordsReadDescriptor, RecordsReadMessage, RecordsWriteDescriptor } from '../types/records-types.js';
+import { EventsGetDescriptor } from '../types/event-types.js';
+import { MessagesGetDescriptor } from '../types/messages-types.js';
+import { ProtocolsQueryDescriptor } from '../types/protocols-types.js';
 
 export enum DwnInterfaceName {
   Events = 'Events',
@@ -30,6 +35,167 @@ export enum DwnMethodName {
   Revoke = 'Revoke',
   Write = 'Write',
   Delete = 'Delete'
+}
+
+type DwnMessageClassIntersection =
+  EventsGet |
+  MessagesGet |
+  PermissionsGrant |
+  PermissionsRequest |
+  PermissionsRevoke |
+  ProtocolsConfigure |
+  ProtocolsQuery |
+  RecordsDelete |
+  RecordsQuery |
+  RecordsRead |
+  RecordsWrite;
+
+type DwnMessageIntersection =
+  EventsGetMessage |
+  MessagesGetMessage |
+  PermissionsGrantMessage |
+  PermissionsRequestMessage |
+  PermissionsRevokeMessage |
+  ProtocolsConfigureMessage |
+  ProtocolsQueryMessage |
+  RecordsDeleteMessage |
+  RecordsQueryMessage |
+  RecordsReadMessage |
+  RecordsWriteMessage;
+
+enum DwnMessageType {
+  EventsGet = 'EventsGet',
+  MessagesGet = 'MessagesGet',
+  PermissionsGrant = 'PermissionsGrant',
+  PermissionsRequest = 'PermissionsRequest',
+  PermissionsRevoke = 'PermissionsRevoke',
+  ProtocolsConfigure = 'ProtocolsConfigure',
+  ProtocolsQuery = 'ProtocolsQuery',
+  RecordsDelete = 'RecordsDelete',
+  RecordsQuery = 'RecordsQuery',
+  RecordsRead = 'RecordsRead',
+  RecordsWrite = 'RecordsWrite'
+}
+
+type DwnMessageUnsignedIntersection =
+  EventsGetDescriptor |
+  MessagesGetDescriptor |
+  PermissionsGrantDescriptor |
+  PermissionsRequestDescriptor |
+  PermissionsRevokeDescriptor |
+  ProtocolsConfigureDescriptor |
+  ProtocolsQueryDescriptor |
+  RecordsDeleteDescriptor |
+  RecordsQueryDescriptor |
+  RecordsReadDescriptor |
+  RecordsWriteDescriptor;
+
+/**
+ * Generic type for valid options to pass to Message.create() for specific DWN message types
+ */
+export type GenericMessageCreateOptions<M> =
+  M extends ProtocolsConfigureMessage ? ProtocolsConfigureOptions :
+  M extends ProtocolsQueryMessage ? ProtocolsQueryOptions :
+  M extends RecordsDeleteMessage ? RecordsDeleteOptions :
+  M extends RecordsQueryMessage ? RecordsQueryOptions :
+  M extends RecordsReadMessage ? RecordsReadOptions :
+  M extends RecordsWriteMessage ? RecordsWriteOptions :
+  M extends PermissionsGrantMessage ? PermissionsGrantOptions :
+  M extends PermissionsRequestMessage ? PermissionsRequestOptions :
+  M extends PermissionsRevokeMessage ? PermissionsRevokeOptions :
+  never;
+
+type MessageCreateOptionsIntersection =
+  EventsGetOptions |
+  MessagesGetOptions |
+  PermissionsGrantOptions |
+  PermissionsRequestOptions |
+  PermissionsRevokeOptions |
+  ProtocolsConfigureOptions |
+  ProtocolsQueryOptions |
+  RecordsDeleteOptions |
+  RecordsQueryOptions |
+  RecordsReadOptions |
+  RecordsWriteOptions;
+
+export class MessageBuilder {
+
+  static parse(message: EventsGetMessage): Promise<EventsGet>;
+  static parse(message: MessagesGetMessage): Promise<MessagesGet>;
+  static parse(message: PermissionsGrantMessage): Promise<PermissionsGrant>;
+  static parse(message: PermissionsRequestMessage): Promise<PermissionsRequest>;
+  static parse(message: PermissionsRevokeMessage): Promise<PermissionsRevoke>;
+  static parse(message: ProtocolsConfigureMessage): Promise<ProtocolsConfigure>;
+  static parse(message: ProtocolsQueryMessage): Promise<ProtocolsQuery>;
+  static parse(message: RecordsDeleteMessage): Promise<RecordsDelete>;
+  static parse(message: RecordsQueryMessage): Promise<RecordsQuery>;
+  static parse(message: RecordsReadMessage): Promise<RecordsRead>;
+  static parse(message: RecordsWriteMessage): Promise<RecordsWrite>;
+  /**
+   * Parse, validate, and wrap a raw DWN Message.
+   * @param message Raw DWN Message
+   * @returns DWN Message class which wraps the validated DWN message.
+   * @throws {Error} If message type could not be ascertained or if parsing otherwise fails.
+   */
+  static parse<T extends DwnMessageIntersection>(message: T): Promise<DwnMessageClassIntersection> {
+    const dwnMessageType = message.descriptor.interface + message.descriptor.method;
+
+    switch (dwnMessageType) {
+    case 'EventsGet': return EventsGet.parse(message as EventsGetMessage);
+    case 'MessagesGet': return MessagesGet.parse(message as MessagesGetMessage);
+    case 'PermissionsGrant': return PermissionsGrant.parse(message as PermissionsGrantMessage);
+    case 'PermissionsRequest': return PermissionsRequest.parse(message as PermissionsRequestMessage);
+    case 'PermissionsRevoke': return PermissionsRevoke.parse(message as PermissionsRevokeMessage);
+    case 'ProtocolsConfigure': return ProtocolsConfigure.parse(message as ProtocolsConfigureMessage);
+    case 'ProtocolsQuery': return ProtocolsQuery.parse(message as ProtocolsQueryMessage);
+    case 'RecordsDelete': return RecordsDelete.parse(message as RecordsDeleteMessage);
+    case 'RecordsQuery': return RecordsQuery.parse(message as RecordsQueryMessage);
+    case 'RecordsRead': return RecordsRead.parse(message as RecordsReadMessage);
+    case 'RecordsWrite': return RecordsWrite.parse(message as RecordsWriteMessage);
+
+    default:
+      throw new DwnError(DwnErrorCode.MessageParseTypeNotRecognized, `Could not create message of type ${dwnMessageType}`);
+    }
+  }
+
+
+  static create(messageType: string, options: EventsGetOptions): Promise<EventsGet>;
+  static create(messageType: string, options: MessagesGetOptions): Promise<MessagesGet>;
+  static create(messageType: string, options: PermissionsGrantOptions): Promise<PermissionsGrant>;
+  static create(messageType: string, options: PermissionsRequestOptions): Promise<PermissionsRequest>;
+  static create(messageType: string, options: PermissionsRevokeOptions): Promise<PermissionsRevoke>;
+  static create(messageType: string, options: ProtocolsConfigureOptions): Promise<ProtocolsConfigure>;
+  static create(messageType: string, options: ProtocolsQueryOptions): Promise<ProtocolsQuery>;
+  static create(messageType: string, options: RecordsDeleteOptions): Promise<RecordsDelete>;
+  static create(messageType: string, options: RecordsQueryOptions): Promise<RecordsQuery>;
+  static create(messageType: string, options: RecordsReadOptions): Promise<RecordsRead>;
+  static create(messageType: string, options: RecordsWriteOptions): Promise<RecordsWrite>;
+  /**
+   * Generic method for creating and validating a signed DWN message.
+   * @param messageType Name of the DWN Message being created, e.g. 'RecordsWrite', 'ProtocolsConfigure;
+   * @param options Message-specific creation options
+   * @returns DWN Message class which wraps the raw DWN message
+   */
+  static create(messageType: DwnMessageType, options: MessageCreateOptionsIntersection)
+    : Promise<DwnMessageClassIntersection> {
+
+    switch (messageType) {
+    case 'EventsGet': return EventsGet.create(options as EventsGetOptions);
+    case 'MessagesGet': return MessagesGet.create(options as MessagesGetOptions);
+    case 'PermissionsGrant': return PermissionsGrant.create(options as PermissionsGrantOptions);
+    case 'PermissionsRequest': return PermissionsRequest.create(options as PermissionsRequestOptions);
+    case 'PermissionsRevoke': return PermissionsRevoke.create(options as PermissionsRevokeOptions);
+    case 'ProtocolsConfigure': return ProtocolsConfigure.create(options as ProtocolsConfigureOptions);
+    case 'ProtocolsQuery': return ProtocolsQuery.create(options as ProtocolsQueryOptions);
+    case 'RecordsDelete': return RecordsDelete.create(options as RecordsDeleteOptions);
+    case 'RecordsQuery': return RecordsQuery.create(options as RecordsQueryOptions);
+    case 'RecordsRead': return RecordsRead.create(options as RecordsReadOptions);
+    case 'RecordsWrite': return RecordsWrite.create(options as RecordsWriteOptions);
+
+    default:
+      throw new DwnError(DwnErrorCode.MessageCreateSignedTypeNotRecognized, `Could not create message of type ${messageType}`);
+    }
+  }
 }
 
 export abstract class Message<M extends GenericMessage> {
@@ -215,3 +381,13 @@ export abstract class Message<M extends GenericMessage> {
     return Message.compareCid(a, b);
   }
 }
+
+function someString(): string { return 'foo'; }
+async (): Promise<void> => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const parsed = await Message.parseSigned((await ProtocolsQuery.create({})).message);
+  const s = someString();
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const created = await MessageBuilder.create(s, { } as ProtocolsQueryOptions);
+};

@@ -20,6 +20,10 @@ export type ProtocolsQueryOptions = {
 
 export class ProtocolsQuery extends Message<ProtocolsQueryMessage> {
 
+  public static async _parse(message: ProtocolsQueryMessage): Promise<ProtocolsQuery> {
+    return ProtocolsQuery.parse(message);
+  }
+
   public static async parse(message: ProtocolsQueryMessage): Promise<ProtocolsQuery> {
     if (message.authorization !== undefined) {
       await validateAuthorizationIntegrity(message);
