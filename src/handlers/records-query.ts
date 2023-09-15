@@ -1,6 +1,6 @@
 import type { MethodHandler } from '..//types/method-handler.js';
 import type { RecordsWriteMessageWithOptionalEncodedData } from '../store/storage-controller.js';
-import type { DataStore, DidResolver, MessageStore } from '../index.js';
+import type { DataStore, DidResolver, Filter, MessageStore } from '../index.js';
 import type { RecordsQueryMessage, RecordsQueryReply, RecordsQueryReplyEntry, RecordsWriteMessage } from '../types/records-types.js';
 
 import { authenticate } from '../core/auth.js';
@@ -87,7 +87,7 @@ export class RecordsQueryHandler implements MethodHandler {
       isLatestBaseState : true
     };
 
-    const records = (await this.messageStore.query(tenant, filter)) as RecordsWriteMessageWithOptionalEncodedData[];
+    const records = (await this.messageStore.query(tenant, [filter])) as RecordsWriteMessageWithOptionalEncodedData[];
     return records;
   }
 
@@ -96,56 +96,46 @@ export class RecordsQueryHandler implements MethodHandler {
    * 1. published records; and
    * 2. unpublished records intended for the query author (where `recipient` is the query author)
    */
-  private async fetchRecordsAsNonOwner(tenant: string, recordsQuery: RecordsQuery)
-    : Promise<RecordsWriteMessageWithOptionalEncodedData[]> {
-    const publishedRecords = await this.fetchPublishedRecords(tenant, recordsQuery);
-    const unpublishedRecordsByAuthor = await this.fetchUnpublishedRecordsByAuthor(tenant, recordsQuery);
+  private async fetchRecordsAsNonOwner(
+    tenant: string, recordsQuery: RecordsQuery
+  ): Promise<RecordsWriteMessageWithOptionalEncodedData[]> {
 
-    // the `RecordsQuery` author in addition is allowed to get private records that were meant for them
-    let unpublishedRecordsForQueryAuthor: RecordsWriteMessageWithOptionalEncodedData[] = [];
-    const recipientFilter = recordsQuery.message.descriptor.filter.recipient;
-    if (recipientFilter === undefined || recipientFilter === recordsQuery.author) {
-      unpublishedRecordsForQueryAuthor = await this.fetchUnpublishedRecordsForQueryAuthor(tenant, recordsQuery);
-    }
+    const filters = [
+      this.publishedRecordsFilter(recordsQuery),
+      this.unpublishedRecordsByAuthorFilter(recordsQuery),
+      this.unpublishedRecordsForQueryAuthorFilter(recordsQuery)
+    ];
 
-    const records = [...publishedRecords, ...unpublishedRecordsByAuthor, ...unpublishedRecordsForQueryAuthor];
+    const records = await this.messageStore.query(tenant, filters) as RecordsWriteMessageWithOptionalEncodedData[];
 
-    // go through the records and remove duplicates
-    // this can happen between `unpublishedRecordsByAuthor` and `unpublishedRecordsForQueryAuthor` when `author` = `recipient`
-    const deduplicatedRecords = new Map<string, RecordsWriteMessageWithOptionalEncodedData>();
-    for (const record of records) {
-      if (!deduplicatedRecords.has(record.recordId)) {
-        deduplicatedRecords.set(record.recordId, record);
-      }
-    }
-
-    return Array.from(deduplicatedRecords.values());
+    return Array.from(records.values());
   }
 
   /**
    * Fetches only published records.
    */
-  private async fetchPublishedRecords(tenant: string, recordsQuery: RecordsQuery): Promise<RecordsWriteMessageWithOptionalEncodedData[]> {
+  private async fetchPublishedRecords(tenant: string, recordsQuery: RecordsQuery): Promise<RecordsWriteMessageWithOptionalEncodedData[]>{
+    const filter = this.publishedRecordsFilter(recordsQuery);
+    return await this.messageStore.query(tenant, [ filter ]) as RecordsWriteMessageWithOptionalEncodedData[];
+  }
+
+  private publishedRecordsFilter(recordsQuery: RecordsQuery): Filter {
     // fetch all published records matching the query
-    const filter = {
+    return {
       ...Records.convertFilter(recordsQuery.message.descriptor.filter),
       interface         : DwnInterfaceName.Records,
       method            : DwnMethodName.Write,
       published         : true,
       isLatestBaseState : true
     };
-    const publishedRecords = (await this.messageStore.query(tenant, filter)) as RecordsWriteMessageWithOptionalEncodedData[];
-    return publishedRecords;
   }
 
   /**
-   * Fetches unpublished records that are intended for the query author (where `recipient` is the author).
+   * Creates a filter for unpublished records that are intended for the query author (where `recipient` is the author).
    */
-  private async fetchUnpublishedRecordsForQueryAuthor(tenant: string, recordsQuery: RecordsQuery)
-    : Promise<RecordsWriteMessageWithOptionalEncodedData[]> {
-
+  private unpublishedRecordsForQueryAuthorFilter(recordsQuery: RecordsQuery): Filter {
     // include records where recipient is query author
-    const filter = {
+    return {
       ...Records.convertFilter(recordsQuery.message.descriptor.filter),
       interface         : DwnInterfaceName.Records,
       method            : DwnMethodName.Write,
@@ -153,18 +143,14 @@ export class RecordsQueryHandler implements MethodHandler {
       isLatestBaseState : true,
       published         : false
     };
-    const unpublishedRecordsForQueryAuthor = (await this.messageStore.query(tenant, filter)) as RecordsWriteMessageWithOptionalEncodedData[];
-    return unpublishedRecordsForQueryAuthor;
   }
 
   /**
-   * Fetches only unpublished records where the author is the same as the query author.
+   * Creates a filter for only unpublished records where the author is the same as the query author.
    */
-  private async fetchUnpublishedRecordsByAuthor(tenant: string, recordsQuery: RecordsQuery)
-    : Promise<RecordsWriteMessageWithOptionalEncodedData[]> {
-
+  private unpublishedRecordsByAuthorFilter(recordsQuery: RecordsQuery): Filter {
     // include records where author is the same as the query author
-    const filter = {
+    return {
       ...Records.convertFilter(recordsQuery.message.descriptor.filter),
       author            : recordsQuery.author!,
       interface         : DwnInterfaceName.Records,
@@ -172,8 +158,6 @@ export class RecordsQueryHandler implements MethodHandler {
       isLatestBaseState : true,
       published         : false
     };
-    const unpublishedRecordsForQueryAuthor = (await this.messageStore.query(tenant, filter)) as RecordsWriteMessageWithOptionalEncodedData[];
-    return unpublishedRecordsForQueryAuthor;
   }
 }
 

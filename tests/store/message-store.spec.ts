@@ -53,10 +53,10 @@ export function testMessageStore(): void {
         // inserting the message indicating it is the 'latest' in the index
         await messageStore.put(alice.did, message, { latest: 'true' });
 
-        const results1 = await messageStore.query(alice.did, { latest: 'true' });
+        const results1 = await messageStore.query(alice.did, [{ latest: 'true' }]);
         expect(results1.length).to.equal(1);
 
-        const results2 = await messageStore.query(alice.did, { latest: 'false' });
+        const results2 = await messageStore.query(alice.did, [{ latest: 'false' }]);
         expect(results2.length).to.equal(0);
 
         // deleting the existing indexes and replacing it indicating it is no longer the 'latest'
@@ -64,10 +64,10 @@ export function testMessageStore(): void {
         await messageStore.delete(alice.did, cid);
         await messageStore.put(alice.did, message, { latest: 'false' });
 
-        const results3 = await messageStore.query(alice.did, { latest: 'true' });
+        const results3 = await messageStore.query(alice.did, [{ latest: 'true' }]);
         expect(results3.length).to.equal(0);
 
-        const results4 = await messageStore.query(alice.did, { latest: 'false' });
+        const results4 = await messageStore.query(alice.did, [{ latest: 'false' }]);
         expect(results4.length).to.equal(1);
       });
 
@@ -79,7 +79,7 @@ export function testMessageStore(): void {
 
         await messageStore.put(alice.did, message, { schema });
 
-        const results = await messageStore.query(alice.did, { schema });
+        const results = await messageStore.query(alice.did, [{ schema }]);
         expect((results[0] as RecordsWriteMessage).descriptor.schema).to.equal(schema);
       });
 
@@ -121,7 +121,7 @@ export function testMessageStore(): void {
           expect(e).to.equal('reason');
         }
 
-        const results = await messageStore.query(alice.did, { schema });
+        const results = await messageStore.query(alice.did, [{ schema }]);
         expect(results.length).to.equal(0);
       });
     });

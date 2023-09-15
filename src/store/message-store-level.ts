@@ -77,12 +77,11 @@ export class MessageStoreLevel implements MessageStore {
     return message;
   }
 
-  async query(tenant: string, filter: Filter, options?: MessageStoreOptions): Promise<GenericMessage[]> {
+  async query(tenant: string, filters: Filter[], options?: MessageStoreOptions): Promise<GenericMessage[]> {
     options?.signal?.throwIfAborted();
 
     const messages: GenericMessage[] = [];
-
-    const resultIds = await this.index.query({ ...filter, tenant }, options);
+    const resultIds = await this.index.query(filters.map(f => ({ ...f, tenant })), options);
 
     for (const id of resultIds) {
       const message = await this.get(tenant, id, options);
