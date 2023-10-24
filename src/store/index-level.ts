@@ -8,7 +8,7 @@ import { SortOrder } from '../types/message-types.js';
 
 
 type IndexedItem<T> = {
-  id: string;
+  itemId: string;
   value: T;
 };
 
@@ -200,16 +200,16 @@ export class IndexLevel<T> {
         for (const sortableValue of await promise) {
           // short circuit: if a data is already included to the final matched key set (by a different `Filter`),
           // no need to evaluate if the data satisfies this current filter being evaluated
-          if (matches.has(sortableValue.id)) {
+          if (matches.has(sortableValue.itemId)) {
             continue;
           }
 
           // if first time seeing a property matching for the data/object, record all properties needing a match to track progress
-          missingPropertyMatchesForId[sortableValue.id] ??= new Set<string>([ ...Object.keys(filter) ]);
-          missingPropertyMatchesForId[sortableValue.id].delete(propertyName);
-          if (missingPropertyMatchesForId[sortableValue.id].size === 0) {
+          missingPropertyMatchesForId[sortableValue.itemId] ??= new Set<string>([ ...Object.keys(filter) ]);
+          missingPropertyMatchesForId[sortableValue.itemId].delete(propertyName);
+          if (missingPropertyMatchesForId[sortableValue.itemId].size === 0) {
             // full filter match, add it to return list
-            matches.set(sortableValue.id, sortableValue.value);
+            matches.set(sortableValue.itemId, sortableValue.value);
           }
         }
       }
@@ -246,7 +246,7 @@ export class IndexLevel<T> {
       }
 
       const itemId = this.extractItemId(key);
-      matches.push({ id: itemId, value: JSON.parse(value) });
+      matches.push({ itemId, value: JSON.parse(value) });
     }
 
     if (sortDirection !== SortOrder.Ascending) {
@@ -301,7 +301,7 @@ export class IndexLevel<T> {
       }
 
       const itemId = this.extractItemId(key);
-      matches.push({ id: itemId, value: JSON.parse(value) });
+      matches.push({ itemId, value: JSON.parse(value) });
     }
 
     // we gather the lte matches separately to include before or after the results depending on the sort.
