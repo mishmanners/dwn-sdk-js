@@ -1,3 +1,4 @@
+import type { GenericMessageReply } from '../core/message-reply.js';
 import type { AuthorizationModel, GenericMessage } from './message-types.js';
 import type { DwnInterfaceName, DwnMethodName } from '../index.js';
 
@@ -110,4 +111,38 @@ export type PermissionsRevokeDescriptor = {
 export type PermissionsRevokeMessage = GenericMessage & {
   authorization: AuthorizationModel; // overriding `GenericMessage` with `authorization` being required
   descriptor: PermissionsRevokeDescriptor;
+};
+
+export type PermissionsQuerMessage = GenericMessage & {
+  authorization: AuthorizationModel; // overriding `GenericMessage` with `authorization` being required
+  descriptor: PermissionsQueryDescriptor;
+};
+
+export type PermissionsQueryDescriptor = {
+  messageTimestamp: string;
+  filter: {
+    method?: DwnMethodName.Request | DwnMethodName.Grant | DwnMethodName.Revoke;
+    grantedTo?: string;
+    grantedBy?: string;
+    grantedFor?: string;
+    /**
+     * Filters for only grants that are active or inactive.
+     * Active grants are unrevoked and unexpired.
+     * May only be present when `method === DwnMethodName.Grant`.
+     */
+    activeGrant?: boolean;
+    /**
+     * Filters for requests which do not have an associated grant.
+     * May only be present when `method === DwnMethodName.Request`.
+     */
+    unfulfilledRequest?: boolean;
+  };
+};
+
+export type PermissionsQueryReply = GenericMessageReply & {
+  entries: {
+    [DwnMethodName.Request]: PermissionsRequestMessage;
+    [DwnMethodName.Grant]: PermissionsGrantMessage;
+    [DwnMethodName.Revoke]: PermissionsRevokeMessage;
+  }[];
 };
