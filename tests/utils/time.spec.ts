@@ -1,7 +1,7 @@
 import { DwnErrorCode } from '../../src/core/dwn-error.js';
 import { expect } from 'chai';
 import { TestDataGenerator } from '../utils/test-data-generator.js';
-import { validateTimestamp } from '../../src/utils/time.js';
+import { createOffsetTimestamp, validateTimestamp } from '../../src/utils/time.js';
 
 
 describe('time', () => {
@@ -19,11 +19,21 @@ describe('time', () => {
         });
       });
     });
+
     describe('valid timestamps', () => {
       it('should pass if a valid timestamp is passed', () => {
         expect(() => validateTimestamp('2022-04-29T10:30:00.123456Z')).to.not.throw();
         expect(() => validateTimestamp(TestDataGenerator.randomTimestamp())).to.not.throw();
       });
+    });
+  });
+
+  describe('createOffsetTimestamp', () => {
+    it('should use the ', () => {
+      const baseTimestamp = '2000-04-29T10:30:00.123456Z';
+      const offsetTimestamp = createOffsetTimestamp({ seconds: 60 * 60 * 24 * 365 }, baseTimestamp);
+
+      expect(offsetTimestamp).to.equal('2001-04-29T10:30:00.123456Z');
     });
   });
 });
